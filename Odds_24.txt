@@ -1,0 +1,3 @@
+[['NBK', 'Happy', 'Shox', 'Kio', 'KennyS'], ['Guardian', 'Olofmeister', 'NiKo', 'Rain', 'Karrigan']]
+1,45 - 2,3 EGB
+16.07.2018

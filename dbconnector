@@ -1,0 +1,15 @@
+import sqlite3
+
+conn = sqlite3.connect('HLTVData.db')
+
+c = conn.cursor()
+
+# Insert a row of data
+c.execute("INSERT INTO Map VALUES (1,53.2,46.8,'Mirage')")
+
+# Save (commit) the changes
+conn.commit()
+
+# We can also close the connection if we are done with it.
+# Just be sure any changes have been committed or they will be lost.
+conn.close()

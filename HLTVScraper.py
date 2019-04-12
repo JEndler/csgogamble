@@ -447,9 +447,9 @@ def getPredictions(days = 1, writeToFile = False):
 def predictionRate():
 	rating = [0,0]
 	#open Predictions and Data.csv to compare
-	with open("predictions.csv") as predictions:
+	with open("C:\\Users\\Jakob\\Projects\\csgogamble\\predictions.csv") as predictions:
 		for game in predictions:
-			with open("data.csv", encoding="utf-8") as data:
+			with open("C:\\Users\\Jakob\\Projects\\csgogamble\\data.csv", encoding="utf-8") as data:
 				winner = 0
 				team1 = game.split(";")[0]
 				team2 = game.split(";")[1]
@@ -497,7 +497,7 @@ def doStuff():
 
 #print(getPlayerIDsFromMatchLink("https://www.hltv.org/matches/2332415/forze-vs-ancient-lootbet-hotshot-series-season-2"))
 
-print(predictionRate())
+#print(predictionRate())
 
 #getPredictions(writeToFile=True)
 # linklist = [

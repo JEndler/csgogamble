@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup as soup
 import csv
 import pandas
 import time
+from datetime import datetime
 
 def getRawData(url):
 
@@ -35,6 +36,25 @@ def analyseUpcomingMatch(url):
 	page_soup = getRawData(url)
 	dataframes = pandas.read_html(str(page_soup))
 
+	time = page_soup.find("div", {"class": "time"})
+	print(time.text)
+
+	currentTime = str(datetime.now())
+	#'2011-05-03 17:45:35.177000'
+	currentHour = currentTime.split(" ")[1]
+	currentHour = int(currentHour.split(":")[0])
+
+	currentMin = int(currentTime.split(":")[-2])
+	#Convert to Total Min for easy comparison
+	currentMin += currentHour*60
+
+	gameHour = int(time.text.split(":")[0])
+	gameMin = int(time.text.split(":")[1]) + int(gameHour*60)
+
+	print(gameMin)
+	print(currentMin)
+
+	timeTillGame = gameMin - currentMin
 	odds_df = dataframes[0]
 
 	team1 = page_soup.find("div", {"class": "team1-gradient"})
@@ -61,24 +81,27 @@ def analyseUpcomingMatch(url):
 	for team in range(3):
 		Oddslist[0][team] = str(odds_df[team+1][1])
 		Oddslist[1][team] = str(odds_df[team+1][3])
-		Oddslist[2][team] = str(odds_df[team+1][4])
-		Oddslist[3][team] = str(odds_df[team+1][5])
-		Oddslist[4][team] = str(odds_df[team+1][8])
-		Oddslist[5][team] = str(odds_df[team+1][9])
-		Oddslist[6][team] = str(odds_df[team+1][10])
-		Oddslist[7][team] = str(odds_df[team+1][11])
-		Oddslist[8][team] = str(odds_df[team+1][15])
-		Oddslist[9][team] = str(odds_df[team+1][18])
-		Oddslist[10][team] = str(odds_df[team+1][19])
-		Oddslist[11][team] = str(odds_df[team+1][27])
-		Oddslist[12][team] = str(odds_df[team+1][30])
-		Oddslist[13][team] = str(odds_df[team+1][32])
-		Oddslist[14][team] = str(odds_df[team+1][34])
+		# Oddslist[2][team] = str(odds_df[team+1][4])
+		# Oddslist[3][team] = str(odds_df[team+1][5])
+		# Oddslist[4][team] = str(odds_df[team+1][8])
+		# Oddslist[5][team] = str(odds_df[team+1][9])
+		# Oddslist[6][team] = str(odds_df[team+1][10])
+		# Oddslist[7][team] = str(odds_df[team+1][11])
+		# Oddslist[8][team] = str(odds_df[team+1][15])
+		# Oddslist[9][team] = str(odds_df[team+1][18])
+		# Oddslist[10][team] = str(odds_df[team+1][19])
+		# Oddslist[11][team] = str(odds_df[team+1][27])
+		# Oddslist[12][team] = str(odds_df[team+1][30])
+		# Oddslist[13][team] = str(odds_df[team+1][32])
+		# Oddslist[14][team] = str(odds_df[team+1][34])
 
 	for item in Oddslist:
 		for i in range(3):
 			if len(str(item[i])) > 4 or str(item[i]) == "nan":
 				item[i] = -1
+
+	if timeTillGame < 60:
+		writeOddsToFile(gameID, Oddslist)
 
 	return gameID, Oddslist
 	
@@ -89,7 +112,7 @@ def writeOddsToFile(gameID, Oddslist):
 			s += ";["+ str(item[0]) + "," + str(item[1]) + "," + str(item[2]) +"]"
 		oddsfile.write(s)
 
-url = "https://www.hltv.org/matches/2330978/gamepub-vs-nexus-noxfire-league-season-2"
+url = "https://www.hltv.org/matches/2332503/avant-vs-control-iem-sydney-2019-oceania-closed-qualifier"
 
 # while True:
 # 	for matchlink in findMatchLinks(getRawData(url)):

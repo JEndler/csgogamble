@@ -53,6 +53,19 @@ def getWebsitePredictions(days = 1, writeToFile = False):
 		index += 1
 	return res
 
+
+
+def getRecentPredictions(num=50):
+	res = []
+	index = 0
+	with open("predictions.csv", encoding="utf-8") as predictions:
+		for line in predictions:
+			split = line.split(";")
+			res += (split[0] + split[1] + "| Prediction -> " + split[2] + "-" +  split[3])
+			if index>num: break
+			index +=1
+	return res
+
 def findMatchLinks(page_soup):
 	match_link_list = []
 	result_holder = page_soup.findAll("div", {"class": "results-holder"})
@@ -464,7 +477,7 @@ def predictionRate():
 						if score1<score2 and PredictedWinner==2:
 							rating[0] += 1
 							break
-	print(rating)								
+	return "Average Accuracy: " + str(rating[0]/(rating[0]+rating[1])*100) + " | " + "# of accurate Predictions/Total: " + str(rating)								
 
 
 
@@ -484,7 +497,7 @@ def doStuff():
 
 #print(getPlayerIDsFromMatchLink("https://www.hltv.org/matches/2332415/forze-vs-ancient-lootbet-hotshot-series-season-2"))
 
-#predictionRate()
+print(predictionRate())
 
 #getPredictions(writeToFile=True)
 # linklist = [

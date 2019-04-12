@@ -106,7 +106,7 @@ def analyseUpcomingMatch(url):
 	return gameID, Oddslist
 	
 def writeOddsToFile(gameID, Oddslist):
-	with open("odds.csv","a",encoding='utf-8') as oddsfile:
+	with open("C:\\Users\\Jakob\\Projects\\csgogamble\\odds.csv","a",encoding='utf-8') as oddsfile:
 		s = str(gameID)
 		for item in Oddslist:
 			s += ";["+ str(item[0]) + "," + str(item[1]) + "," + str(item[2]) +"]"
@@ -123,6 +123,6 @@ url = "https://www.hltv.org/matches/2332503/avant-vs-control-iem-sydney-2019-oce
 # 	time.sleep(300)
 
 
-gameID, Oddslist = analyseUpcomingMatch(url)
-print(Oddslist[1])
+#gameID, Oddslist = analyseUpcomingMatch(url)
+#print(Oddslist[1])
 # writeOddsToFile(gameID, Oddslist)

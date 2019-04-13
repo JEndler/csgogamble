@@ -57,6 +57,8 @@ def analyseUpcomingMatch(url):
 	timeTillGame = gameMin - currentMin
 	odds_df = dataframes[0]
 
+	print(timeTillGame)
+
 	team1 = page_soup.find("div", {"class": "team1-gradient"})
 	team2 = page_soup.find("div", {"class": "team2-gradient"})
 
@@ -77,7 +79,7 @@ def analyseUpcomingMatch(url):
 
 	#Websites in List: ["EGB.com","betway","loot.bet","gg.bet","Thunderpick","csgopositive","bet365","1xbet","pinnacle","buff.bet","unibet","22bet","bets.net","betit","unikrn"]
 	#The second lists are [team1win, draw, team2win]
-	Oddslist = [[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1],[-1,-1,-1]]
+	Oddslist = [[-1,-1,-1],[-1,-1,-1]]
 	for team in range(3):
 		Oddslist[0][team] = str(odds_df[team+1][1])
 		Oddslist[1][team] = str(odds_df[team+1][3])
@@ -100,20 +102,26 @@ def analyseUpcomingMatch(url):
 			if len(str(item[i])) > 4 or str(item[i]) == "nan":
 				item[i] = -1
 
+	print(gameID)
+	print(Oddslist)			
+
 	if timeTillGame < 60:
 		writeOddsToFile(gameID, Oddslist)
+		print("Wrote Odds to File")
 
 	return gameID, Oddslist
 	
 def writeOddsToFile(gameID, Oddslist):
 	with open("C:\\Users\\Jakob\\Projects\\csgogamble\\odds.csv","a",encoding='utf-8') as oddsfile:
-		s = str(gameID)
+		s = "\n" + str(gameID)
 		for item in Oddslist:
 			s += ";["+ str(item[0]) + "," + str(item[1]) + "," + str(item[2]) +"]"
 		oddsfile.write(s)
 
-url = "https://www.hltv.org/matches/2332503/avant-vs-control-iem-sydney-2019-oceania-closed-qualifier"
+url = "https://www.hltv.org/matches/2332418/ex-honor-glory-vs-porcha-burabay-cyber-cup"
 
+
+#analyseUpcomingMatch(url)
 # while True:
 # 	for matchlink in findMatchLinks(getRawData(url)):
 # 		gameID, Oddslist = analyseUpcomingMatch(matchlink)

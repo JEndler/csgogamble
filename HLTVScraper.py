@@ -410,6 +410,7 @@ def predictGame(url, writeToFile = False):
 	if writeToFile:
 		with open("predictions.csv","a") as file:
 			file.write("\n" + str(team1Name) + ";" + str(team2Name) + ";" + team1pred + ";" + team2pred + ";" + str(Team1) + ";" + str(Team2))
+	return [team1pred,team2pred]		
 
 def getPredictions(days = 1, writeToFile = False):
 	url = "https://www.hltv.org/matches"

@@ -1,0 +1,11 @@
+Restrcuturing of the Project:
+	-More effiecient HLTVScraper
+		-multiprocessing.Pool()
+
+	-Proper Database Layout
+		-SQLite
+		-See DatabaseLayout.PNG
+
+	-OddsScraper? TODO
+
+	-real Data-Cleanup & Model Implementation 

@@ -1,0 +1,2 @@
+HLTVScraper:
+ -Storage-System is currently broken 

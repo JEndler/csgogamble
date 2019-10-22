@@ -53,8 +53,6 @@ def getWebsitePredictions(days = 1, writeToFile = False):
 		index += 1
 	return res
 
-
-
 def getRecentPredictions(num=50):
 	res = []
 	index = 0
@@ -480,19 +478,7 @@ def predictionRate():
 							break
 	return "Average Accuracy: " + str(rating[0]/(rating[0]+rating[1])*100) + " | " + "# of accurate Predictions/Total: " + str(rating)								
 
-
-
-def doStuff():
-	
-
-	
-	Team1,Team2,team1Name,team2Name = getPlayerIDsFromMatchLink("https://www.hltv.org" + matchlink)
-	print()
-	print("--------------------")
-	print(team1Name + " vs. " + team2Name)
-	EloHandler.predictGame(Team1,Team2)
-	print("--------------------")
-	
+downloadStuff()
 
 #EloHandler.calcEloOnDataset()
 

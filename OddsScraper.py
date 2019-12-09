@@ -71,7 +71,7 @@ def analyseUpcomingMatch(url):
 		writeOddsToFile(res)
 
 def writeOddsToFile(resdict):
-	with open("C:\\Users\\Jakob\\Projects\\csgogamble\\odds.csv","a",encoding='utf-8') as oddsfile:
+	with open("data/odds.txt","a",encoding='utf-8') as oddsfile:
 		oddsfile.write(json.dumps(resdict))
 
 def main():

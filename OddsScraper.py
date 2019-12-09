@@ -53,7 +53,7 @@ def analyseUpcomingMatch(url):
 	gameMin = int(time.text.split(":")[1]) + int(gameHour*60)
 	timeTillGame = gameMin - currentMin
 	gameID = str(url.split("/")[4])
-	print("Game with ID: " + gameID + " | min until start: " + str(timeTillGame))
+	#print("Game with ID: " + gameID + " | min until start: " + str(timeTillGame))
 	res = {}
 	res["gameID"] = gameID
 	res["scrapedAt"] = str(datetime.now())

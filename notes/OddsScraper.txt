@@ -1,0 +1,4 @@
+TODO
+	-Add fully randomised User-Agents to avoid blocking
+
+	-Route Traffic through tor Browser?

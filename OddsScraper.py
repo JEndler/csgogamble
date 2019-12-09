@@ -72,7 +72,8 @@ def analyseUpcomingMatch(url):
 
 def writeOddsToFile(resdict):
 	with open("data/odds.txt","a",encoding='utf-8') as oddsfile:
-		oddsfile.write(json.dumps(resdict))
+		#print(json.dumps(resdict))
+		oddsfile.write("\n" + str(json.dumps(resdict)))
 
 def main():
 	_HLTV_MATCHES = "https://www.hltv.org/matches"

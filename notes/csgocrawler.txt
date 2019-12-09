@@ -1,0 +1,15 @@
+Current Info:
+	- GameID
+	- Teamnames
+	- TeamIDs
+	- Score(General and Map-specific)
+	- Date
+	-	Map/MapID
+
+Needed:
+	- Players
+	-
+
+
+Games als eigene Tabelle auslagern?
+	- An die Maps koppeln

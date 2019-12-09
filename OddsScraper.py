@@ -28,7 +28,8 @@ def findMatchLinks(page_soup, date = None):
 	matchday = page_soup.find("div", {"class": "upcoming-matches"})
 	matchday = matchday.find("div", {"class": "match-day"})
 	for link in matchday.findAll("a", {"href":True}):
-		match_link_list.append("https://www.hltv.org" + str(link['href']))
+		if "matches" in str(link["href"]):
+			match_link_list.append("https://www.hltv.org" + str(link['href']))
 	return match_link_list
 
 def analyseUpcomingMatch(url):
@@ -41,7 +42,6 @@ def analyseUpcomingMatch(url):
 	_BETTING_PROVIDER_NAMES = ["gg.bet", "betway","loot.bet","egb","thunderpick","bet365"]
 	page_soup = getRawData(url)
 	time = page_soup.find("div", {"class": "time"})
-	print(time.text)
 	currentTime = str(datetime.now())
 	#'2011-05-03 17:45:35.177000'
 	currentHour = currentTime.split(" ")[1]
@@ -51,11 +51,9 @@ def analyseUpcomingMatch(url):
 	currentMin += currentHour*60
 	gameHour = int(time.text.split(":")[0])
 	gameMin = int(time.text.split(":")[1]) + int(gameHour*60)
-	print(gameMin)
-	print(currentMin)
 	timeTillGame = gameMin - currentMin
-	print(timeTillGame)
 	gameID = str(url.split("/")[4])
+	print("Game with ID: " + gameID + " | min until start: " + str(timeTillGame))
 	res = {}
 	res["gameID"] = gameID
 	res["scrapedAt"] = str(datetime.now())

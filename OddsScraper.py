@@ -69,7 +69,7 @@ def analyseUpcomingMatch(url):
 				res[str(_BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)])] = (odds[0],odds[1])
 			except AssertionError as e:
 				print("No Odds Data for Provider: " + providerName + " with GameID: " + str(gameID))
-		print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " str(datetime.now()))
+		print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
 		writeOddsToFile(res)
 
 def writeOddsToFile(resdict):

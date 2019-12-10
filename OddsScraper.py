@@ -77,6 +77,25 @@ def writeOddsToFile(resdict):
 	with open("/home/projects/csgogamble/data/odds.txt","a",encoding='utf-8') as oddsfile:
 		#print(json.dumps(resdict))
 		oddsfile.write("\n" + str(json.dumps(resdict)))
+	cleanupOddsfile()
+
+def cleanupOddsfile():
+	with open("data/odds.txt","r",encoding='utf-8') as oddsfile:
+		l = oddsfile.readlines()
+	count = {}
+	for line in l:
+		tmpdict = json.loads(line)
+		if tmpdict["gameID"] in count:
+			count[tmpdict["gameID"]] += 1
+		else:
+			count[tmpdict["gameID"]] = 1
+	for line in l:
+		gameID = line.split('"')[3]
+		if count[gameID] == 1: continue
+		l.remove(line)
+		count[gameID] -= 1
+	with open("data/odds.txt","w",encoding='utf-8') as oddsfile:
+		oddsfile.writelines(l)
 
 def main():
 	_HLTV_MATCHES = "https://www.hltv.org/matches"

@@ -225,7 +225,6 @@ def _getGamePlayerStats(page_soup, HLTVgameID):
   page_soup = getRawData("https://www.hltv.org" + gamepage)
   print(page_soup)
   
-
 def getGeneralMatchInfo(url):
   page_soup = getRawData(url)
   splitted = url.split("/")
@@ -234,7 +233,17 @@ def getGeneralMatchInfo(url):
   maps = _getMatchMaps(page_soup)
   teams = _getMatchTeams(page_soup)
   games = _getMatchGames(page_soup, matchID)
-  return matchID, date, teams
+  matchDict = {
+    "HLTVID": matchID,
+    "date": date,
+    "team1ID": teams["team1ID"],
+    "team2ID": teams["team2ID"],
+    "team1Name": teams["team1Name"],
+    "team2Name": teams["team2Name"],
+    "scraped_at": datetime.datetime.now(),
+    "link": url
+  }
+  return matchDict
 
 def getGeneralGameInfo(gameurl, matchurl, match_soup):
   page_soup = getRawData(gameurl)
@@ -248,6 +257,16 @@ def getGeneralGameInfo(gameurl, matchurl, match_soup):
       break
   roundwins = _getGameRoundHistory(page_soup)
   killmatrix = _getKillMatrices(page_soup)
+  gameDict = {
+    "HLTVID": gameID,
+    "matchID": matchID,
+    "map": maps["mapname"],
+    "scoreTeam1": maps["scoreTeam1"],
+    "scoreTeam2": maps["scoreTeam2"],
+    "individualRoundWins": str(roundwins),
+    "link": gameurl,
+    "killmatrix": killmatrix
+  }
 
 def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
   gameID = gameurl.split("/")[6]

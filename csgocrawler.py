@@ -13,36 +13,6 @@ Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
 _UAGENT = 'Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'
 
-
-# class Match(TypedDict):
-#   """
-#   General Data Structure for every Match
-#   A whole Series (Major Finale NaVi vs FaZe) would be considered as one Match
-#   Each Map played would be considered a Game
-#   So a BO3-Match would include at least 2 Games
-#   """
-#   MatchID: int
-#   Date: datetime.datetime
-#   Format: str
-#   Team1: str
-#   Team2: str
-#   Team1ID: int
-#   Team2ID: int
-#   Score: tuple # If the Game was a BO1, the Score would be (1,0)
-#   Link: str
-#   scrapedTimestamp: datetime.datetime
-
-# class Game(TypedDict):
-#   """
-#   General Data Structure for every Game
-#   """
-#   matchID: int
-#   MatchID: int
-#   MapID: int
-#   Link: str
-#   Score: tuple # (16,8)
-#   RoundWins: list # [1,2,1,1,1,2....] for every Round
-
 def getRawData(url, useragent = _UAGENT):
   """
   returns a bs4.soup-Object of the given url

@@ -101,6 +101,7 @@ def cleanupOddsfile():
 	with open("data/odds.txt","w",encoding='utf-8') as oddsfile:
 		oddsfile.writelines(l)
 
+
 def main():
 	_HLTV_MATCHES = "https://www.hltv.org/matches"
 	for link in findMatchLinks(getRawData(_HLTV_MATCHES)):

@@ -78,7 +78,7 @@ class dbConnector():
 	def close_connection(self):
 		self.conn.close()
 
-	def _updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, team1Name: str = None, team2Name: str = None, scraped_at: str =str(datetime.datetime.now())):
+	def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, team1Name: str = None, team2Name: str = None, scraped_at: str =str(datetime.datetime.now())):
 		c = self.conn.cursor()
 		tpl = (date, HLTVID, team1ID, team2ID,
 					 team1Name, team2Name, scraped_at, link)
@@ -90,7 +90,7 @@ class dbConnector():
 		c.close()
 		self.conn.commit()
 
-	def _updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = None, killmatrix=None):
+	def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = None, killmatrix=None):
 		c = self.conn.cursor()
 		tpl = (map, matchID, scoreTeam1, scoreTeam2,
 					 individualRoundWins, link, killmatrix, HLTVID)
@@ -102,7 +102,7 @@ class dbConnector():
 		c.close()
 		self.conn.commit()
 
-	def _updatePlayerTable(self, HLTVID: int, playerName: str):
+	def updatePlayerTable(self, HLTVID: int, playerName: str):
 		c = self.conn.cursor()
 		tpl = (HLTVID, playerName)
 		try:
@@ -116,7 +116,7 @@ class dbConnector():
 			c.close()
 			self.conn.commit()
 
-	def _updateTeamsTable(self, Name: str, HLTVID: int, currentPlayerIDs: str):
+	def updateTeamsTable(self, Name: str, HLTVID: int, currentPlayerIDs: str):
 		c = self.conn.cursor()
 		c.execute("""
 			SELECT currentPlayerIDs FROM Teams WHERE HLTVID = ?
@@ -136,7 +136,7 @@ class dbConnector():
 		c.close()
 		self.conn.commit()
 
-	def _updatePlayerGameStatsTable(self, playerID: int, gameID: int, kills: int, deaths: int, ADR: float, rating: float, teamID: int):
+	def updatePlayerGameStatsTable(self, playerID: int, gameID: int, kills: int, deaths: int, ADR: float, rating: float, teamID: int):
 		c = self.conn.cursor()
 		tpl = (playerID, gameID, kills, deaths, ADR, rating, teamID)
 		c.execute("""
@@ -147,13 +147,15 @@ class dbConnector():
 		c.close()
 		self.conn.commit()
 
-	def updateData(matchData: dict, gameData: list, playerData: list, Teams: tuple):
-		pass
-
+	def getLastMatchID(self):
+		c = self.conn.cursor()
+		c.execute("SELECT MAX(HLTVID) FROM MATCHES")
+		return c.fetchone()
 
 def main():
 	connection = dbConnector()
 	connection.createDatabase()
+	print(connection.getLastMatchID())
 	connection.close_connection()
 	print("Success")
 

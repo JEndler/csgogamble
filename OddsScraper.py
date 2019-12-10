@@ -1,3 +1,4 @@
+
 #OddsScraper
 from urllib.request import urlopen
 from urllib.request import Request
@@ -61,9 +62,11 @@ def analyseUpcomingMatch(url):
 		for provider in _BETTING_PROVIDERS:
 			row = page_soup.find("tr",{"class":provider})
 			odds = (row.text.strip().replace("\n","").split("-"))
-			providerName = _BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)] 
+			providerName = _BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)]
 			try:
 				assert len(odds) == 2
+				assert str(odds[0]).replace(".","").isdigit()
+				assert str(odds[1]).replace(".","").isdigit()
 				res[str(_BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)])] = (odds[0],odds[1])
 			except AssertionError as e:
 				print("No Odds Data for Provider: " + providerName + " with GameID: " + str(gameID))
@@ -71,7 +74,7 @@ def analyseUpcomingMatch(url):
 		writeOddsToFile(res)
 
 def writeOddsToFile(resdict):
-	with open("data/odds.txt","a",encoding='utf-8') as oddsfile:
+	with open("/home/projects/csgogamble/data/odds.txt","a",encoding='utf-8') as oddsfile:
 		#print(json.dumps(resdict))
 		oddsfile.write("\n" + str(json.dumps(resdict)))
 

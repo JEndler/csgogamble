@@ -84,11 +84,15 @@ def cleanupOddsfile():
 		l = oddsfile.readlines()
 	count = {}
 	for line in l:
+		if line in ["",'\n']:
+			l.remove(line)
+			continue
 		tmpdict = json.loads(line)
-		if tmpdict["gameID"] in count:
+		if tmpdict["gameID"] in count.keys():
 			count[tmpdict["gameID"]] += 1
 		else:
 			count[tmpdict["gameID"]] = 1
+	print(count)
 	for line in l:
 		gameID = line.split('"')[3]
 		if count[gameID] == 1: continue

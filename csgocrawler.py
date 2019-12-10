@@ -13,36 +13,6 @@ Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
 _UAGENT = 'Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'
 
-
-# class Match(TypedDict):
-#   """
-#   General Data Structure for every Match
-#   A whole Series (Major Finale NaVi vs FaZe) would be considered as one Match
-#   Each Map played would be considered a Game
-#   So a BO3-Match would include at least 2 Games
-#   """
-#   MatchID: int
-#   Date: datetime.datetime
-#   Format: str
-#   Team1: str
-#   Team2: str
-#   Team1ID: int
-#   Team2ID: int
-#   Score: tuple # If the Game was a BO1, the Score would be (1,0)
-#   Link: str
-#   scrapedTimestamp: datetime.datetime
-
-# class Game(TypedDict):
-#   """
-#   General Data Structure for every Game
-#   """
-#   matchID: int
-#   MatchID: int
-#   MapID: int
-#   Link: str
-#   Score: tuple # (16,8)
-#   RoundWins: list # [1,2,1,1,1,2....] for every Round
-
 def getRawData(url, useragent = _UAGENT):
   """
   returns a bs4.soup-Object of the given url
@@ -254,6 +224,7 @@ def _getGamePlayerStats(page_soup, HLTVgameID):
       break
   page_soup = getRawData("https://www.hltv.org" + gamepage)
   print(page_soup)
+  
 
 def getGeneralMatchInfo(url):
   page_soup = getRawData(url)
@@ -263,12 +234,58 @@ def getGeneralMatchInfo(url):
   maps = _getMatchMaps(page_soup)
   teams = _getMatchTeams(page_soup)
   games = _getMatchGames(page_soup, matchID)
-  return matchID, date, maps, teams
+  return matchID, date, teams
+
+def getGeneralGameInfo(gameurl, matchurl, match_soup):
+  page_soup = getRawData(gameurl)
+  splitted = gameurl.split("/")
+  gameID = splitted[6]
+  matchID = matchurl.split("/")[4]
+  maps = _getMatchMaps(match_soup)
+  for mapdict in maps:
+    if mapdict["HTLVGameID"] == matchID:
+      maps = mapdict
+      break
+  roundwins = _getGameRoundHistory(page_soup)
+  killmatrix = _getKillMatrices(page_soup)
+
+def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
+  gameID = gameurl.split("/")[6]
+  res = []
+  playertable = match_soup.find("div",{"id":str(gameID) + "-content"})
+  teamtables = playertable.find_all("table",{"class":"table"})
+  try:
+    assert len(teamtables) == 2
+  except AssertionError as e:
+    print("Invalid Teamtables | Quitting Script")
+    return
+  team1ID = teamtables[0].find("a",{"class":"teamName team"})["href"].split("/")[2]
+  team2ID = teamtables[1].find("a",{"class":"teamName team"})["href"].split("/")[2]
+
+  def _analyseTeamTable(page_soup, teamID):
+    res = []
+    for playerrow in page_soup.find_all("tr"):
+      playerdict = {}
+      playertextsplit = playerrow.text.strip().split("\n")
+      if playertextsplit[1] == '': continue
+      playerdict["playerID"] = str(playerrow.find("a",{"href":True})["href"]).split("/")[2]
+      playerdict["playerName"] = playertextsplit[1]
+      playerdict["kills"] = playertextsplit[4].split("-")[0]
+      playerdict["deaths"] = playertextsplit[4].split("-")[1]
+      playerdict["ADR"] = playertextsplit[6]
+      playerdict["HLTVrating"] = playertextsplit[8]
+      res.append(playerdict)
+    return res
+
+  team1playerStats = _analyseTeamTable(teamtables[0], team1ID)
+  team2playerStats = _analyseTeamTable(teamtables[1], team2ID)
+  return gameID, team1ID, team2ID, team1playerStats, team2playerStats
 
 def main():
-  testmatch = "https://www.hltv.org/matches/2336722/natus-vincere-vs-hellraisers-esl-pro-league-season-10-europe"
-  testmatch2 = "https://www.hltv.org/stats/matches/mapstatsid/75770/havu-vs-jordans-money-crew"
-  print(_getGamePlayerStats(getRawData(testmatch), HLTVgameID=93560))
+  testmatch = "https://www.hltv.org/matches/2338360/universe-vs-exors-esl-nationals-czsk-season-2"
+  testgame = "https://www.hltv.org/stats/matches/mapstatsid/96368/universe-vs-exors"
+  print(getGamePlayerInfo(testgame, testmatch, getRawData(testmatch), getRawData(testgame)))
+
   # print(getGameMaps(getRawData(testmatch2)))
 
 if __name__ == "__main__":

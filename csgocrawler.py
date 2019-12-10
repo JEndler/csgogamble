@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup as soup
 import pandas as pd
 import random
 import datetime
-# from typing import TypedDict
+import dbConnector
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
@@ -267,6 +267,7 @@ def getGeneralGameInfo(gameurl, matchurl, match_soup):
     "link": gameurl,
     "killmatrix": killmatrix
   }
+  return gameDict
 
 def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
   gameID = gameurl.split("/")[6]
@@ -299,6 +300,25 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
   team1playerStats = _analyseTeamTable(teamtables[0], team1ID)
   team2playerStats = _analyseTeamTable(teamtables[1], team2ID)
   return gameID, team1ID, team2ID, team1playerStats, team2playerStats
+
+def findNewMatches():
+  dbHandler = dbConnector()
+  lastID = dbHandler.getLastMatchID()[0]
+  HLTVLINK = "https://www.hltv.org/results"
+  page_soup = getRawData(HLTVLINK)
+  res = []
+  while True:
+    for matchlink in findMatchLinks(page_soup):
+      matchID = matchlink.split("/")[4]
+      if matchID == lastID: return res
+      res.append(matchlink)
+    nextpage = findLinkToNextPage(page_soup)
+    page_soup = getRawData(nextpage)
+  print(len(res))
+
+def updateData():
+  linklist = findNewMatches()
+  #TODO Test in HotelNET
 
 def main():
   testmatch = "https://www.hltv.org/matches/2338360/universe-vs-exors-esl-nationals-czsk-season-2"

@@ -9,3 +9,7 @@ Restrcuturing of the Project:
 	-OddsScraper? TODO
 
 	-real Data-Cleanup & Model Implementation 
+
+TODO:
+	eine _writeScrapedDataToDB()-methode in dbConnector
+	eine scrapeAllDataForGame()-methode in csgocrawler

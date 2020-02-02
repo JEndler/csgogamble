@@ -319,11 +319,13 @@ def findNewMatches():
 def updateData():
   linklist = findNewMatches()
   #TODO Test in HotelNET
+  
 
 def main():
   testmatch = "https://www.hltv.org/matches/2338360/universe-vs-exors-esl-nationals-czsk-season-2"
   testgame = "https://www.hltv.org/stats/matches/mapstatsid/96368/universe-vs-exors"
-  print(getGamePlayerInfo(testgame, testmatch, getRawData(testmatch), getRawData(testgame)))
+  for player in getGamePlayerInfo(testgame, testmatch, getRawData(testmatch), getRawData(testgame)):
+    print(player)
 
   # print(getGameMaps(getRawData(testmatch2)))
 

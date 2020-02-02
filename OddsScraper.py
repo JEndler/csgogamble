@@ -1,4 +1,4 @@
-
+#@Author: Jakob Endler
 #OddsScraper
 from urllib.request import urlopen
 from urllib.request import Request
@@ -23,23 +23,29 @@ def getRawData(url):
 	page_soup = soup(page_html, "html.parser")
 	return page_soup
 
-
 def findMatchLinks(page_soup, date = None):
 	match_link_list = []
 	matchday = page_soup.find("div", {"class": "upcoming-matches"})
 	matchday = matchday.find("div", {"class": "match-day"})
 	for link in matchday.findAll("a", {"href":True}):
+		print("found match")
 		if "matches" in str(link["href"]):
 			match_link_list.append("https://www.hltv.org" + str(link['href']))
 	return match_link_list
 
 def analyseUpcomingMatch(url):
-	_BETTING_PROVIDERS = ["ggbet-odds geoprovider_ggbet betting_provider",
+	OUTDATED_BETTING_PROVIDERS = ["ggbet-odds geoprovider_ggbet betting_provider",
 												" geoprovider_betway betting_provider",
 												" geoprovider_lootbet betting_provider",
 												" geoprovider_egb betting_provider",
 												"thunderpick-odds geoprovider_thunderpick betting_provider",
 												" geoprovider_bet365 betting_provider"]
+	_BETTING_PROVIDERS = [" geoprovider_gv4nx914 provider",
+												" geoprovider_p2g0jzml provider",
+												" geoprovider_nz6cnayl provider",
+												" geoprovider_egb provider",
+												"thunderpick-odds geoprovider_thunderpick provider",
+												" geoprovider_3etkx6rj provider"]
 	_BETTING_PROVIDER_NAMES = ["gg.bet", "betway","loot.bet","egb","thunderpick","bet365"]
 	page_soup = getRawData(url)
 	time = page_soup.find("div", {"class": "time"})
@@ -58,7 +64,8 @@ def analyseUpcomingMatch(url):
 	res = {}
 	res["gameID"] = gameID
 	res["scrapedAt"] = str(datetime.now())
-	if timeTillGame < 10:
+	if timeTillGame < 40:
+		print("Temp")
 		for provider in _BETTING_PROVIDERS:
 			row = page_soup.find("tr",{"class":provider})
 			odds = (row.text.strip().replace("\n","").split("-"))
@@ -100,7 +107,6 @@ def cleanupOddsfile():
 		count[gameID] -= 1
 	with open("data/odds.txt","w",encoding='utf-8') as oddsfile:
 		oddsfile.writelines(l)
-
 
 def main():
 	_HLTV_MATCHES = "https://www.hltv.org/matches"

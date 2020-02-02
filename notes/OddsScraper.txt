@@ -1,4 +1,6 @@
 TODO
+	-Alert mechanismus wenn lange keine Daten kommen
+
 	-Add fully randomised User-Agents to avoid blocking
 
 	-Route Traffic through tor Browser?

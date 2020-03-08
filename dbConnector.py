@@ -9,15 +9,15 @@ import datetime
 
 
 class dbConnector():
-	conn = None
-	DB_FILEPATH = "data/csgodata.db"
+    conn = None
+    DB_FILEPATH = "data/csgodata.db"
 
-	def __init__(self):
-		self.conn = sqlite3.connect(self.DB_FILEPATH)
+    def __init__(self):
+        self.conn = sqlite3.connect(self.DB_FILEPATH)
 
-	def createDatabase(self):
-		c = self.conn.cursor()
-		command = """
+    def createDatabase(self):
+        c = self.conn.cursor()
+        command = """
 		CREATE TABLE IF NOT EXISTS Matches (
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			date TEXT,
@@ -71,94 +71,96 @@ class dbConnector():
 			FOREIGN KEY (gameID) REFERENCES Games(ID)
 		);
 		"""
-		c.executescript(command)
-		c.close()
-		self.conn.commit()
+        c.executescript(command)
+        c.close()
+        self.conn.commit()
 
-	def close_connection(self):
-		self.conn.close()
+    def close_connection(self):
+        self.conn.close()
 
-	def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, team1Name: str = None, team2Name: str = None, scraped_at: str =str(datetime.datetime.now())):
-		c = self.conn.cursor()
-		tpl = (date, HLTVID, team1ID, team2ID,
-					 team1Name, team2Name, scraped_at, link)
-		c.execute("""
+    def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, team1Name: str = None, team2Name: str = None, scraped_at: str =str(datetime.datetime.now())):
+        c = self.conn.cursor()
+        tpl = (date, HLTVID, team1ID, team2ID,
+               team1Name, team2Name, scraped_at, link)
+        c.execute("""
 		INSERT INTO Matches 
 		(date, HLTVID, team1ID, team2ID, team1Name, team2Name, scraped_at, link)
 		VALUES (?,?,?,?,?,?,?,?)
 		""", tpl)
-		c.close()
-		self.conn.commit()
+        c.close()
+        self.conn.commit()
 
-	def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = None, killmatrix=None):
-		c = self.conn.cursor()
-		tpl = (map, matchID, scoreTeam1, scoreTeam2,
-					 individualRoundWins, link, killmatrix, HLTVID)
-		c.execute("""
+    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = None, killmatrix=None):
+        c = self.conn.cursor()
+        tpl = (map, matchID, scoreTeam1, scoreTeam2,
+               individualRoundWins, link, killmatrix, HLTVID)
+        c.execute("""
 			INSERT INTO Games 
 			(map, matchID,scoreTeam1, scoreTeam2, individualRoundWins, link, killmatrix, HLTVID)
 			VALUES (?,?,?,?,?,?,?,?)
 		""", tpl)
-		c.close()
-		self.conn.commit()
+        c.close()
+        self.conn.commit()
 
-	def updatePlayerTable(self, HLTVID: int, playerName: str):
-		c = self.conn.cursor()
-		tpl = (HLTVID, playerName)
-		try:
-			c.execute("""
+    def updatePlayerTable(self, HLTVID: int, playerName: str):
+        c = self.conn.cursor()
+        tpl = (HLTVID, playerName)
+        try:
+            c.execute("""
 				INSERT INTO Players (HLTVID, playerName)
 				VALUES (?,?)
 			""", tpl)
-		except Exception as e:
-			print("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")  
-		finally:
-			c.close()
-			self.conn.commit()
+        except Exception as e:
+            print("ERROR: Player with ID: " + str(HLTVID) +
+                  " and Name: " + playerName + " could not be added.")
+        finally:
+            c.close()
+            self.conn.commit()
 
-	def updateTeamsTable(self, Name: str, HLTVID: int, currentPlayerIDs: str):
-		c = self.conn.cursor()
-		c.execute("""
+    def updateTeamsTable(self, Name: str, HLTVID: int, currentPlayerIDs: str):
+        c = self.conn.cursor()
+        c.execute("""
 			SELECT currentPlayerIDs FROM Teams WHERE HLTVID = ?
 		""", (HLTVID, ))
-		if c.fetchone() == None:
-			c.execute("""
+        if c.fetchone() == None:
+            c.execute("""
 				INSERT INTO Teams (Name, HLTVID, currentPlayerIDs, lastRosterChange)
 				VALUES (?,?,?,?)
-			""", (Name, HLTVID, currentPlayerIDs,str(datetime.datetime.now())))
-		elif currentPlayerIDs == c.fetchone():
-			pass
-		else:
-			c.execute("""
+			""", (Name, HLTVID, currentPlayerIDs, str(datetime.datetime.now())))
+        elif currentPlayerIDs == c.fetchone():
+            pass
+        else:
+            c.execute("""
 				UPDATE Teams SET currentPlayerIDs=? , lastRosterChange=?
 				WHERE HLTVID = ?
-			""", (currentPlayerIDs,str(datetime.datetime.now()), HLTVID))
-		c.close()
-		self.conn.commit()
+			""", (currentPlayerIDs, str(datetime.datetime.now()), HLTVID))
+        c.close()
+        self.conn.commit()
 
-	def updatePlayerGameStatsTable(self, playerID: int, gameID: int, kills: int, deaths: int, ADR: float, rating: float, teamID: int):
-		c = self.conn.cursor()
-		tpl = (playerID, gameID, kills, deaths, ADR, rating, teamID)
-		c.execute("""
+    def updatePlayerGameStatsTable(self, playerID: int, gameID: int, kills: int, deaths: int, ADR: float, rating: float, teamID: int):
+        c = self.conn.cursor()
+        tpl = (playerID, gameID, kills, deaths, ADR, rating, teamID)
+        c.execute("""
 			INSERT INTO PlayerGameStats 
 			(playerID, gameID, kills, deaths, ADR, rating, teamID)
 			VALUES (?,?,?,?,?,?,?)
 		""", tpl)
-		c.close()
-		self.conn.commit()
+        c.close()
+        self.conn.commit()
 
-	def getLastMatchID(self):
-		c = self.conn.cursor()
-		c.execute("SELECT MAX(HLTVID) FROM MATCHES")
-		return c.fetchone()
+    def getLastMatchID(self):
+        c = self.conn.cursor()
+        c.execute("SELECT MAX(HLTVID) FROM MATCHES")
+        return c.fetchone()
+
 
 def main():
-	connection = dbConnector()
-	connection.createDatabase()
-	print(connection.getLastMatchID())
-	connection.close_connection()
-	print("Success")
+    connection = dbConnector()
+    connection.createDatabase()
+    print(connection.getLastMatchID())
+    connection.close_connection()
+    print("Success")
 
 
 if __name__ == "__main__":
-	main()
+    main()

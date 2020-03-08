@@ -13,10 +13,11 @@ Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
 _UAGENT = 'Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'
 
-def getRawData(url, useragent = _UAGENT):
+
+def getRawData(url, useragent=_UAGENT):
   """
   returns a bs4.soup-Object of the given url
-  
+
   @Params: url: a string-url for a HLTV-Match page
   @returns a bs4.soup-Object
   """
@@ -32,6 +33,7 @@ def getRawData(url, useragent = _UAGENT):
   # Parse HTML
   page_soup = soup(page_html, "html.parser")
   return page_soup
+
 
 def findMatchLinks(page_soup):
   """
@@ -52,26 +54,28 @@ def findMatchLinks(page_soup):
       match_link_list.append("https://www.hltv.org" + href)
   return match_link_list
 
+
 def findLinkToNextPage(page_soup):
   nextPage = page_soup.find("a", {"class": "pagination-next"})
   return "https://www.hltv.org" + nextPage["href"]
 
+
 def month_string_to_number(string):
   """ Takes a month string and returns a number """
   m = {
-        'jan': 1,
-        'feb': 2,
-        'mar': 3,
-        'apr':4,
-         'may':5,
-         'jun':6,
-         'jul':7,
-         'aug':8,
-         'sep':9,
-         'oct':10,
-         'nov':11,
-         'dec':12
-        }
+      'jan': 1,
+      'feb': 2,
+      'mar': 3,
+      'apr': 4,
+      'may': 5,
+      'jun': 6,
+      'jul': 7,
+      'aug': 8,
+      'sep': 9,
+      'oct': 10,
+      'nov': 11,
+      'dec': 12
+  }
   s = string.strip()[:3].lower()
 
   try:
@@ -80,19 +84,21 @@ def month_string_to_number(string):
   except:
     raise ValueError('Not a month')
 
+
 def _getMatchDate(page_soup):
   """
   returns relevant Date Information for a given soup_Object
-  
+
   @Params: page_soup: bs4.soup-Object of an HTLV-Result Page
   @returns a datetime.datetime Object
   """
-  time = page_soup.find("div",{"class":"time"}).text
-  date = page_soup.find("div",{"class":"date"}).text
+  time = page_soup.find("div", {"class": "time"}).text
+  date = page_soup.find("div", {"class": "date"}).text
   year = date[-4:]
   day = int((date.split(" ")[0])[0:-2])
   month = month_string_to_number(date.split(" ")[2])
-  return datetime.datetime(int(year), month, int(day), hour = int(time.split(":")[0]), minute=int(time.split(":")[1]))
+  return datetime.datetime(int(year), month, int(day), hour=int(time.split(":")[0]), minute=int(time.split(":")[1]))
+
 
 def _getMatchMaps(page_soup):
   """
@@ -106,22 +112,26 @@ def _getMatchMaps(page_soup):
   maps = page_soup.findAll("div", {"class": "mapholder"})
   for map in maps:
     currentMap = {}
-    if map.find("div",{"class": "played"}) is None: continue
-    if map.find("div",{"class":"mapname"}).text == "Default": continue
+    if map.find("div", {"class": "played"}) is None:
+      continue
+    if map.find("div", {"class": "mapname"}).text == "Default":
+      continue
     currentMap["mapname"] = (map.find("div", {"class": "mapname"}).text)
-    currentMap["HLTVGameID"] = int(map.find("a", {"href": True})["href"].split("/")[4])
-    if map.find("span",{"class": "won"}) is None:
+    currentMap["HLTVGameID"] = int(
+        map.find("a", {"href": True})["href"].split("/")[4])
+    if map.find("span", {"class": "won"}) is None:
       currentMap["scoreTeam1"] = 15
       currentMap["scoreTeam2"] = 15
       continue
     # This scrapes the scores of each Team per Map
-    for results_holder in map.findAll("div",{"class": "results"}):
-      if results_holder is None: continue
+    for results_holder in map.findAll("div", {"class": "results"}):
+      if results_holder is None:
+        continue
       # since the scores are only classified as "Winner" and "Loser"
       # we need to assign the Scores to the right teams
-      # thankfully the scoreTeam1 is always listed first. 
+      # thankfully the scoreTeam1 is always listed first.
       scoreFound = False
-      for element in results_holder.findAll("span",{"class": True}):
+      for element in results_holder.findAll("span", {"class": True}):
         if element.text.isdigit() and scoreFound:
           currentMap["scoreTeam2"] = int(element.text)
           break
@@ -130,6 +140,7 @@ def _getMatchMaps(page_soup):
           scoreFound = True
     result.append(currentMap)
   return result
+
 
 def _getMatchTeams(page_soup):
   """
@@ -143,26 +154,30 @@ def _getMatchTeams(page_soup):
   team2 = page_soup.find("div", {"class": "team2-gradient"})
   team1Name = team1.find("div", {"class": "teamName"}).text
   team2Name = team2.find("div", {"class": "teamName"}).text
-  teamhrefs = page_soup.find_all("tr", {"class":"header-row"})
+  teamhrefs = page_soup.find_all("tr", {"class": "header-row"})
   teamIDs = []
   team1ID = None
   team2ID = None
   i = 0
   for teamhref in teamhrefs:
-    i +=1
-    link = teamhref.find("a", {"href":True})
+    i += 1
+    link = teamhref.find("a", {"href": True})
     if link is not None:
       linklist = str(link).split("/")
-      if linklist[2] in teamIDs: continue
+      if linklist[2] in teamIDs:
+        continue
       teamIDs.append(linklist[2])
-      if i == 1: team1ID = linklist[2]
-      else: team2ID = linklist[2]
+      if i == 1:
+        team1ID = linklist[2]
+      else:
+        team2ID = linklist[2]
   res = {
-    "team1ID":team1ID,
-    "team2ID":team2ID,
-    "team1name":team1Name,
-    "team2name":team2Name}
+      "team1ID": team1ID,
+      "team2ID": team2ID,
+      "team1name": team1Name,
+      "team2name": team2Name}
   return res
+
 
 def _getGameRoundHistory(page_soup):
   """
@@ -172,20 +187,22 @@ def _getGameRoundHistory(page_soup):
   @returns: a list of round wins formatted like this:
   [1,2,1,1,1,2,1...] 1 or 2 for the individual Teams 
   """
-  round_history_holder = page_soup.find("div",{"class":"standard-box round-history-con"})
+  round_history_holder = page_soup.find(
+      "div", {"class": "standard-box round-history-con"})
   if round_history_holder is None:
-    return -1 #invalid page_soup
+    return -1  # invalid page_soup
   result = []
-  for element in round_history_holder.find_all("img",{"class":"round-history-outcome"},{"title":True}):
+  for element in round_history_holder.find_all("img", {"class": "round-history-outcome"}, {"title": True}):
     title = element["title"]
     if title != "":
       result.append(title)
 
-  #custom key-function to sort the generated List
+  # custom key-function to sort the generated List
   def _compareRoundHistory(element):
     return int(element.split("-")[0]) + int(element.split("-")[-1])
 
   return(sorted(result, key=_compareRoundHistory))
+
 
 def _getMatchGames(page_soup, HLTVmatchID):
   """
@@ -194,9 +211,10 @@ def _getMatchGames(page_soup, HLTVmatchID):
   {"GameLink":"link","HLTVGameID":91571,"Map":Inferno,"ScoreTeam1":16, "ScoreTeam2":8}
   """
   res = []
-  for gamelink in page_soup.find_all("a",{"href":True}):
+  for gamelink in page_soup.find_all("a", {"href": True}):
     if "mapstatsid" in str(gamelink["href"]):
-      res.append(("https://www.hltv.org" + gamelink["href"],int(gamelink["href"].split("/")[4])))
+      res.append(("https://www.hltv.org" +
+                  gamelink["href"], int(gamelink["href"].split("/")[4])))
   maps = _getMatchMaps(page_soup)
   for game in maps:
     game["matchID"] = HLTVmatchID
@@ -204,6 +222,7 @@ def _getMatchGames(page_soup, HLTVmatchID):
       if tupl[1] == game["HLTVGameID"]:
         game["link"] = tupl[0]
   return maps
+
 
 def _getKillMatrices(page_soup):
   """
@@ -213,18 +232,20 @@ def _getKillMatrices(page_soup):
   df = pd.read_html(html, header=0)[1]
   return df
 
+
 def _getGamePlayerStats(page_soup, HLTVgameID):
   """
   gameID is the HTLV-Game-ID found in the "detailed Statistics Link"
   """
-  gamepage = page_soup.find_all("a", {"href":True})
+  gamepage = page_soup.find_all("a", {"href": True})
   for link in gamepage:
     if str(HLTVgameID) in link["href"]:
       gamepage = link["href"]
       break
   page_soup = getRawData("https://www.hltv.org" + gamepage)
   print(page_soup)
-  
+
+
 def getGeneralMatchInfo(url):
   page_soup = getRawData(url)
   splitted = url.split("/")
@@ -234,16 +255,17 @@ def getGeneralMatchInfo(url):
   teams = _getMatchTeams(page_soup)
   games = _getMatchGames(page_soup, matchID)
   matchDict = {
-    "HLTVID": matchID,
-    "date": date,
-    "team1ID": teams["team1ID"],
-    "team2ID": teams["team2ID"],
-    "team1Name": teams["team1Name"],
-    "team2Name": teams["team2Name"],
-    "scraped_at": datetime.datetime.now(),
-    "link": url
+      "HLTVID": matchID,
+      "date": date,
+      "team1ID": teams["team1ID"],
+      "team2ID": teams["team2ID"],
+      "team1Name": teams["team1name"],
+      "team2Name": teams["team2name"],
+      "scraped_at": datetime.datetime.now(),
+      "link": url
   }
   return matchDict
+
 
 def getGeneralGameInfo(gameurl, matchurl, match_soup):
   page_soup = getRawData(gameurl)
@@ -258,37 +280,42 @@ def getGeneralGameInfo(gameurl, matchurl, match_soup):
   roundwins = _getGameRoundHistory(page_soup)
   killmatrix = _getKillMatrices(page_soup)
   gameDict = {
-    "HLTVID": gameID,
-    "matchID": matchID,
-    "map": maps["mapname"],
-    "scoreTeam1": maps["scoreTeam1"],
-    "scoreTeam2": maps["scoreTeam2"],
-    "individualRoundWins": str(roundwins),
-    "link": gameurl,
-    "killmatrix": killmatrix
+      "HLTVID": gameID,
+      "matchID": matchID,
+      "map": maps["mapname"],
+      "scoreTeam1": maps["scoreTeam1"],
+      "scoreTeam2": maps["scoreTeam2"],
+      "individualRoundWins": str(roundwins),
+      "link": gameurl,
+      "killmatrix": killmatrix
   }
   return gameDict
+
 
 def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
   gameID = gameurl.split("/")[6]
   res = []
-  playertable = match_soup.find("div",{"id":str(gameID) + "-content"})
-  teamtables = playertable.find_all("table",{"class":"table"})
+  playertable = match_soup.find("div", {"id": str(gameID) + "-content"})
+  teamtables = playertable.find_all("table", {"class": "table"})
   try:
     assert len(teamtables) == 2
   except AssertionError as e:
     print("Invalid Teamtables | Quitting Script")
     return
-  team1ID = teamtables[0].find("a",{"class":"teamName team"})["href"].split("/")[2]
-  team2ID = teamtables[1].find("a",{"class":"teamName team"})["href"].split("/")[2]
+  team1ID = teamtables[0].find("a", {"class": "teamName team"})[
+      "href"].split("/")[2]
+  team2ID = teamtables[1].find("a", {"class": "teamName team"})[
+      "href"].split("/")[2]
 
   def _analyseTeamTable(page_soup, teamID):
     res = []
     for playerrow in page_soup.find_all("tr"):
       playerdict = {}
       playertextsplit = playerrow.text.strip().split("\n")
-      if playertextsplit[1] == '': continue
-      playerdict["playerID"] = str(playerrow.find("a",{"href":True})["href"]).split("/")[2]
+      if playertextsplit[1] == '':
+        continue
+      playerdict["playerID"] = str(playerrow.find(
+          "a", {"href": True})["href"]).split("/")[2]
       playerdict["playerName"] = playertextsplit[1]
       playerdict["kills"] = playertextsplit[4].split("-")[0]
       playerdict["deaths"] = playertextsplit[4].split("-")[1]
@@ -301,8 +328,9 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
   team2playerStats = _analyseTeamTable(teamtables[1], team2ID)
   return gameID, team1ID, team2ID, team1playerStats, team2playerStats
 
+
 def findNewMatches():
-  dbHandler = dbConnector()
+  dbHandler = dbConnector.dbConnector()
   lastID = dbHandler.getLastMatchID()[0]
   HLTVLINK = "https://www.hltv.org/results"
   page_soup = getRawData(HLTVLINK)
@@ -310,24 +338,33 @@ def findNewMatches():
   while True:
     for matchlink in findMatchLinks(page_soup):
       matchID = matchlink.split("/")[4]
-      if matchID == lastID: return res
+      if matchID == lastID:
+        return res
       res.append(matchlink)
     nextpage = findLinkToNextPage(page_soup)
+    print("Analysing Match No:" + str(len(res)))
     page_soup = getRawData(nextpage)
   print(len(res))
 
+
 def updateData():
   linklist = findNewMatches()
-  #TODO Test in HotelNET
-  
+  print(len(linklist))
+  # TODO Test in HotelNET
+
 
 def main():
-  testmatch = "https://www.hltv.org/matches/2338360/universe-vs-exors-esl-nationals-czsk-season-2"
-  testgame = "https://www.hltv.org/stats/matches/mapstatsid/96368/universe-vs-exors"
-  for player in getGamePlayerInfo(testgame, testmatch, getRawData(testmatch), getRawData(testgame)):
-    print(player)
+  updateData()
+  # last_match = "https://www.hltv.org/matches/2309143/sk-vs-optic-esl-pro-league-season-5-north-america"
+  # matchDict = getGeneralMatchInfo(last_match)
+  # dbHandler = dbConnector.dbConnector()
+  # dbHandler.updateMatchTable(matchDict["team1ID"], matchDict["team2ID"], matchDict["date"], matchDict["link"],
+  #                            matchDict["HLTVID"], matchDict["team1Name"], matchDict["team2Name"], matchDict["scraped_at"])
+  # for player in getGamePlayerInfo(testgame, testmatch, getRawData(testmatch), getRawData(testgame)):
+  #  print(player)
 
   # print(getGameMaps(getRawData(testmatch2)))
+
 
 if __name__ == "__main__":
   main()

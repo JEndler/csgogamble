@@ -16,7 +16,7 @@ Relevant Data can be found in the "DatabaseLayout.PNG" File
 _UAGENT = 'Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'
 
 
-def getRawData(url, useragent=_UAGENT):
+def getRawData(url, useragent=_UAGENT, waittime=2):
   """
   returns a bs4.soup-Object of the given url
 
@@ -33,8 +33,9 @@ def getRawData(url, useragent=_UAGENT):
     page_html = uClient.read()
     uClient.close()
   except HTTPError as my_exception:
-    print(my_exception.headers)
-    return
+    print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
+    time.sleep(waittime)
+    return getRawData(url, waittime=waittime*2)
 
   # Parse HTML
   page_soup = soup(page_html, "html.parser")

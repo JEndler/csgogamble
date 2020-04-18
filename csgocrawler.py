@@ -133,25 +133,19 @@ def _getMatchMaps(page_soup):
     currentMap["mapname"] = (map.find("div", {"class": "mapname"}).text)
     currentMap["HLTVGameID"] = int(
         map.find("a", {"href": True})["href"].split("/")[4])
-    if map.find("span", {"class": "won"}) is None:
-      currentMap["scoreTeam1"] = 15
-      currentMap["scoreTeam2"] = 15
-      continue
+    # if map.find("span", {"class": "won"}) is None:
+    #   currentMap["scoreTeam1"] = 15
+    #   currentMap["scoreTeam2"] = 15
+    #   continue
     # This scrapes the scores of each Team per Map
     for results_holder in map.findAll("div", {"class": "results"}):
       if results_holder is None:
         continue
-      # since the scores are only classified as "Winner" and "Loser"
-      # we need to assign the Scores to the right teams
-      # thankfully the scoreTeam1 is always listed first.
-      scoreFound = False
-      for element in results_holder.findAll("span", {"class": True}):
-        if element.text.isdigit() and scoreFound:
-          currentMap["scoreTeam2"] = int(element.text)
-          break
-        if element.text.isdigit():
-          currentMap["scoreTeam1"] = int(element.text)
-          scoreFound = True
+      results = results_holder.findAll("div", {"class": "results-team-score"})
+      if results[0].text.isdigit():
+        currentMap["scoreTeam1"] = int(results[0].text)
+      if results[1].text.isdigit():
+        currentMap["scoreTeam2"] = int(results[1].text)
     result.append(currentMap)
   return result
 
@@ -310,7 +304,7 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
   gameID = gameurl.split("/")[6]
   res = []
   playertable = match_soup.find("div", {"id": str(gameID) + "-content"})
-  teamtables = playertable.find_all("table", {"class": "table"})
+  teamtables = playertable.find_all("table", {"class": "table totalstats"})
   try:
     assert len(teamtables) == 2
   except AssertionError as e:
@@ -360,21 +354,28 @@ def scrapeDataForMatch(url):
   for game in _getMatchGames(match_soup, matchDict["HLTVID"]):
     gameDict = getGeneralGameInfo(game["link"], url, match_soup)
     dbHandler.updateGameTable(gameDict["map"], gameDict["matchID"], gameDict["scoreTeam1"], gameDict["scoreTeam2"],
-                              gameDict["link"], gameDict["HLTVID"], gameDict["individualRoundWins"], gameDict["killmatrix"])
-    # Info needed for PlayersTable & PlayerGameStatsTable
+                              gameDict["link"], gameDict["HLTVID"], gameDict["individualRoundWins"])
+    # Info needed for PlayersTable
     # PlayersTable Needed Data: HLTVID, playerName
-    # PlayerGameStatsTable Needed Data: playerID, gameID, kills, deaths, ADR, rating, teamID
     gameID, team1ID, team2ID, team1playerStats, team2playerStats = getGamePlayerInfo(
         game["link"], url, match_soup, getRawData(game["link"]))
     for player in (team1playerStats + team2playerStats):
       dbHandler.updatePlayerTable(player["playerID"], player["playerName"])
+    # Info needed for TeamsTable
+    # TeamsTable Needed Data: TeamName, HLTVID, playerString(see Comment below)
+    # This outputs a SORTED, ";"-divided String with every Player in a Team    
     team1PlayerString = ";".join([str(playerID) for playerID in sorted(
         [int(player["playerID"]) for player in team1playerStats])])
     team2PlayerString = ";".join([str(playerID) for playerID in sorted(
         [int(player["playerID"]) for player in team2playerStats])])
-    print(team1PlayerString)
-    print(team2PlayerString)
-    # dbHandler.updateTeamsTable
+    dbHandler.updateTeamsTable(matchDict["team1Name"], matchDict["team1ID"], team1PlayerString)
+    dbHandler.updateTeamsTable(matchDict["team2Name"], matchDict["team2ID"], team2PlayerString)
+    # Info needed for GameTable
+    # GameTable Needed Data: map, matchID, scoreTeam1, scoreTeam2, link, HLTVID, individualRoundWins, killmatrix
+
+
+    # Info needed for PlayerGameStatsTable
+    # PlayerGameStatsTable Needed Data: playerID, gameID, kills, deaths, ADR, rating, teamID
 
 
 def findNewMatches():

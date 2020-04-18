@@ -27,10 +27,14 @@ def getRawData(url, useragent=_UAGENT):
   # User Agent Mozilla to Circumvent Security Blocking
   req = Request(url, headers={'User-Agent': useragent})
 
-  # Connect and Save the HTML Page
-  uClient = urlopen(req)
-  page_html = uClient.read()
-  uClient.close()
+  try:
+    # Connect and Save the HTML Page
+    uClient = urlopen(req)
+    page_html = uClient.read()
+    uClient.close()
+  except HTTPError as my_exception:
+    print(my_exception.headers)
+    return
 
   # Parse HTML
   page_soup = soup(page_html, "html.parser")
@@ -131,8 +135,7 @@ def _getMatchMaps(page_soup):
     if map.find("div", {"class": "mapname"}).text == "Default":
       continue
     currentMap["mapname"] = (map.find("div", {"class": "mapname"}).text)
-    currentMap["HLTVGameID"] = int(
-        map.find("a", {"href": True})["href"].split("/")[4])
+    currentMap["HLTVGameID"] = int(map.find("a", {"href": True})["href"].split("/")[4])
     # if map.find("span", {"class": "won"}) is None:
     #   currentMap["scoreTeam1"] = 15
     #   currentMap["scoreTeam2"] = 15
@@ -411,7 +414,10 @@ def updateData():
   print("Discovering Matches done, starting the Download...")
   for link in linklist:
     print("Scraping Match No:" + str(counter) + " | Link: " + link)
-    scrapeDataForMatch(link)
+    try:
+      scrapeDataForMatch(link)
+    except Exception as e:
+      print(e)
     counter += 1
 
 def main():

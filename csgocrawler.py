@@ -320,6 +320,7 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
     for playerrow in page_soup.find_all("tr"):
       playerdict = {}
       playertextsplit = playerrow.text.strip().split("\n")
+      print(playertextsplit)
       if playertextsplit[1] == '':
         continue
       playerdict["playerID"] = str(playerrow.find(
@@ -327,8 +328,12 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
       playerdict["playerName"] = playertextsplit[1]
       playerdict["kills"] = playertextsplit[4].split("-")[0]
       playerdict["deaths"] = playertextsplit[4].split("-")[1]
-      playerdict["ADR"] = playertextsplit[6]
-      playerdict["HLTVrating"] = playertextsplit[8]
+      if len(playertextsplit) > 7:
+        playerdict["ADR"] = playertextsplit[6]
+        playerdict["HLTVrating"] = playertextsplit[8]
+      else:
+        playerdict["ADR"] = -1
+        playerdict["HLTVrating"] = -1
       res.append(playerdict)
     return remove_dupe_dicts_in_list(res)
 
@@ -414,7 +419,8 @@ def main():
   starttime = datetime.datetime.now()
   linklist = ['https://www.hltv.org/matches/2299428/equilibrium-vs-ftwg2a-alientech-allstars', 'https://www.hltv.org/matches/2299435/alientech-vs-galatics-alientech-allstars', 'https://www.hltv.org/matches/2299436/gameplaydna-vs-ftwpro-alientech-allstars', 'https://www.hltv.org/matches/2299454/themongolz-vs-tyloo-dngit-csgo-asia-invitational-season-1', 'https://www.hltv.org/matches/2299442/galatics-vs-gameplaydna-alientech-allstars', 'https://www.hltv.org/matches/2299451/alsen-vs-ussr-color-league-by-eizo-qpad', 'https://www.hltv.org/matches/2299441/alientech-vs-ftwpro-alientech-allstars', 'https://www.hltv.org/matches/2299444/ftwpro-vs-galatics-alientech-allstars', 'https://www.hltv.org/matches/2299443/alientech-vs-gameplaydna-alientech-allstars', 'https://www.hltv.org/matches/2299452/vexed-vs-imperial-dragons-color-league-by-eizo-qpad']
   for link in linklist: scrapeDataForMatch(link)
-  timedelta = datetime.datetime.now() - startTime
+  timedelta = datetime.datetime.now() - starttime
+  print(timedelta)
   print("The Webscraper took: " + str(int(timedelta.total_seconds() / 60)) + " Minutes to complete.")
   #last_match = "https://www.hltv.org/matches/2340002/livid-vs-triumph-esea-mdl-season-33-north-america"
   #scrapeDataForMatch(last_match)

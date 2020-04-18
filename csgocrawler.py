@@ -412,6 +412,7 @@ def updateData():
   for link in linklist:
     print("Scraping Match No:" + str(counter) + " | Link: " + link)
     scrapeDataForMatch(link)
+    counter += 1
 
 def main():
   starttime = datetime.datetime.now()

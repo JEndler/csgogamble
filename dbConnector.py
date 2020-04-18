@@ -93,15 +93,15 @@ class dbConnector():
             c.close()
             self.conn.commit()
 
-    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = None, killmatrix=None):
+    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = ""):
         c = self.conn.cursor()
         tpl = (map, matchID, scoreTeam1, scoreTeam2,
-               individualRoundWins, link, killmatrix, HLTVID)
+               individualRoundWins, link, HLTVID)
         try:
             c.execute("""
 				INSERT INTO Games 
-				(map, matchID,scoreTeam1, scoreTeam2, individualRoundWins, link, killmatrix, HLTVID)
-				VALUES (?,?,?,?,?,?,?,?)
+				(map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID)
+				VALUES (?,?,?,?,?,?,?)
 			""", tpl)
         except Exception as e:
             print("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")

@@ -13,3 +13,7 @@ Needed:
 
 Games als eigene Tabelle auslagern?
 	- An die Maps koppeln
+
+Bugs:
+	IndividualRoundWins sind buggy bei Ties
+		Not Fixable weil HLTV nur bis 15-15 die Round Wins anzeigt

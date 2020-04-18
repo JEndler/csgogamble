@@ -407,32 +407,19 @@ def findNewMatches():
 
 def updateData():
   linklist = findNewMatches()
-  print(len(linklist))
   linklist = linklist[::-1]
-  linklist = linklist[:10]
-  print(linklist)
-  # TODO Test in HotelNET
-
+  counter = 0
+  print("Discovering Matches done, starting the Download...")
+  for link in linklist:
+    print("Scraping Match No:" + str(counter) + " | Link: " + link)
+    scrapeDataForMatch(link)
 
 def main():
-  #updateData()
   starttime = datetime.datetime.now()
-  linklist = ['https://www.hltv.org/matches/2299428/equilibrium-vs-ftwg2a-alientech-allstars', 'https://www.hltv.org/matches/2299435/alientech-vs-galatics-alientech-allstars', 'https://www.hltv.org/matches/2299436/gameplaydna-vs-ftwpro-alientech-allstars', 'https://www.hltv.org/matches/2299454/themongolz-vs-tyloo-dngit-csgo-asia-invitational-season-1', 'https://www.hltv.org/matches/2299442/galatics-vs-gameplaydna-alientech-allstars', 'https://www.hltv.org/matches/2299451/alsen-vs-ussr-color-league-by-eizo-qpad', 'https://www.hltv.org/matches/2299441/alientech-vs-ftwpro-alientech-allstars', 'https://www.hltv.org/matches/2299444/ftwpro-vs-galatics-alientech-allstars', 'https://www.hltv.org/matches/2299443/alientech-vs-gameplaydna-alientech-allstars', 'https://www.hltv.org/matches/2299452/vexed-vs-imperial-dragons-color-league-by-eizo-qpad']
-  for link in linklist: scrapeDataForMatch(link)
+  updateData()
   timedelta = datetime.datetime.now() - starttime
   print(timedelta)
   print("The Webscraper took: " + str(int(timedelta.total_seconds() / 60)) + " Minutes to complete.")
-  #last_match = "https://www.hltv.org/matches/2340002/livid-vs-triumph-esea-mdl-season-33-north-america"
-  #scrapeDataForMatch(last_match)
-  # matchDict = getGeneralMatchInfo(last_match)
-  # dbHandler = dbConnector.dbConnector()
-  # dbHandler.updateMatchTable(matchDict["team1ID"], matchDict["team2ID"], matchDict["date"], matchDict["link"],
-  #                            matchDict["HLTVID"], matchDict["team1Name"], matchDict["team2Name"], matchDict["scraped_at"])
-  # for player in getGamePlayerInfo(testgame, testmatch, getRawData(testmatch), getRawData(testgame)):
-  #  print(player)
-
-  # print(getGameMaps(getRawData(testmatch2)))
-
 
 if __name__ == "__main__":
   main()

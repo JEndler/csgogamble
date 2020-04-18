@@ -5,6 +5,8 @@ import pandas as pd
 import random
 import datetime
 import dbConnector
+import time
+import json
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
@@ -58,6 +60,18 @@ def findMatchLinks(page_soup):
 def findLinkToNextPage(page_soup):
   nextPage = page_soup.find("a", {"class": "pagination-next"})
   return "https://www.hltv.org" + nextPage["href"]
+
+
+def remove_dupe_dicts_in_list(l):
+  list_of_strings = [
+      json.dumps(d, sort_keys=True)
+      for d in l
+  ]
+  list_of_strings = set(list_of_strings)
+  return [
+      json.loads(s)
+      for s in list_of_strings
+  ]
 
 
 def month_string_to_number(string):
@@ -274,7 +288,7 @@ def getGeneralGameInfo(gameurl, matchurl, match_soup):
   matchID = matchurl.split("/")[4]
   maps = _getMatchMaps(match_soup)
   for mapdict in maps:
-    if mapdict["HTLVGameID"] == matchID:
+    if str(mapdict["HLTVGameID"]) == str(gameID):
       maps = mapdict
       break
   roundwins = _getGameRoundHistory(page_soup)
@@ -322,23 +336,58 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
       playerdict["ADR"] = playertextsplit[6]
       playerdict["HLTVrating"] = playertextsplit[8]
       res.append(playerdict)
-    return res
+    return remove_dupe_dicts_in_list(res)
 
   team1playerStats = _analyseTeamTable(teamtables[0], team1ID)
   team2playerStats = _analyseTeamTable(teamtables[1], team2ID)
   return gameID, team1ID, team2ID, team1playerStats, team2playerStats
 
 
+def scrapeDataForMatch(url):
+  """
+  Scrapes all relevant Data for a given Match-Url &
+  writes it to the SQLite-Database
+  """
+  dbHandler = dbConnector.dbConnector()
+  # Info needed for Matchtable
+  # Needed Data: date, HLTVID, team1ID, team2ID, scraped_at, link
+  matchDict = getGeneralMatchInfo(url)
+  dbHandler.updateMatchTable(matchDict["team1ID"], matchDict["team2ID"], matchDict["date"],
+                             matchDict["link"], matchDict["HLTVID"], matchDict["scraped_at"])
+  # Info needed for Gametable
+  # Needed Data: map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, killmatrix, HLTVID
+  match_soup = getRawData(url)
+  for game in _getMatchGames(match_soup, matchDict["HLTVID"]):
+    gameDict = getGeneralGameInfo(game["link"], url, match_soup)
+    dbHandler.updateGameTable(gameDict["map"], gameDict["matchID"], gameDict["scoreTeam1"], gameDict["scoreTeam2"],
+                              gameDict["link"], gameDict["HLTVID"], gameDict["individualRoundWins"], gameDict["killmatrix"])
+    # Info needed for PlayersTable & PlayerGameStatsTable
+    # PlayersTable Needed Data: HLTVID, playerName
+    # PlayerGameStatsTable Needed Data: playerID, gameID, kills, deaths, ADR, rating, teamID
+    gameID, team1ID, team2ID, team1playerStats, team2playerStats = getGamePlayerInfo(
+        game["link"], url, match_soup, getRawData(game["link"]))
+    for player in (team1playerStats + team2playerStats):
+      dbHandler.updatePlayerTable(player["playerID"], player["playerName"])
+    team1PlayerString = ";".join([str(playerID) for playerID in sorted(
+        [int(player["playerID"]) for player in team1playerStats])])
+    team2PlayerString = ";".join([str(playerID) for playerID in sorted(
+        [int(player["playerID"]) for player in team2playerStats])])
+    print(team1PlayerString)
+    print(team2PlayerString)
+    # dbHandler.updateTeamsTable
+
+
 def findNewMatches():
   dbHandler = dbConnector.dbConnector()
   lastID = dbHandler.getLastMatchID()[0]
+  print("Last Scraped Match found with ID: " + str(lastID))
   HLTVLINK = "https://www.hltv.org/results"
   page_soup = getRawData(HLTVLINK)
   res = []
   while True:
     for matchlink in findMatchLinks(page_soup):
       matchID = matchlink.split("/")[4]
-      if matchID == lastID:
+      if str(matchID) == str(lastID):
         return res
       res.append(matchlink)
     nextpage = findLinkToNextPage(page_soup)
@@ -354,8 +403,9 @@ def updateData():
 
 
 def main():
-  updateData()
-  # last_match = "https://www.hltv.org/matches/2309143/sk-vs-optic-esl-pro-league-season-5-north-america"
+  # updateData()
+  last_match = "https://www.hltv.org/matches/2340002/livid-vs-triumph-esea-mdl-season-33-north-america"
+  scrapeDataForMatch(last_match)
   # matchDict = getGeneralMatchInfo(last_match)
   # dbHandler = dbConnector.dbConnector()
   # dbHandler.updateMatchTable(matchDict["team1ID"], matchDict["team2ID"], matchDict["date"], matchDict["link"],

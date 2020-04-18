@@ -320,7 +320,6 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
     for playerrow in page_soup.find_all("tr"):
       playerdict = {}
       playertextsplit = playerrow.text.strip().split("\n")
-      print(playertextsplit)
       if playertextsplit[1] == '':
         continue
       playerdict["playerID"] = str(playerrow.find(

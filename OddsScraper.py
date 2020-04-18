@@ -34,20 +34,21 @@ def findMatchLinks(page_soup, date = None):
 	return match_link_list
 
 def analyseUpcomingMatch(url):
-	OUTDATED_BETTING_PROVIDERS = ["ggbet-odds geoprovider_ggbet betting_provider",
-												" geoprovider_betway betting_provider",
-												" geoprovider_lootbet betting_provider",
-												" geoprovider_egb betting_provider",
-												"thunderpick-odds geoprovider_thunderpick betting_provider",
-												" geoprovider_bet365 betting_provider"]
-	_BETTING_PROVIDERS = [" geoprovider_gv4nx914 provider",
-												" geoprovider_p2g0jzml provider",
-												" geoprovider_nz6cnayl provider",
-												" geoprovider_egb provider",
-												"thunderpick-odds geoprovider_thunderpick provider",
-												" geoprovider_3etkx6rj provider"]
+	OUTDATED_BETTING_PROVIDERS = ["ggbet-odds gprov_ggbet betting_provider",
+												" gprov_betway betting_provider",
+												" gprov_lootbet betting_provider",
+												" gprov_egb betting_provider",
+												"thunderpick-odds gprov_thunderpick betting_provider",
+												" gprov_bet365 betting_provider"]
+	_BETTING_PROVIDERS = ["gprov_gv4nx914 provider",
+												"gprov_p2g0jzml provider",
+												"gprov_nz6cnayl provider",
+												"gprov_egb provider",
+												"thunderpick-odds gprov_thunderpick provider",
+												"gprov_3etkx6rj provider"]
 	_BETTING_PROVIDER_NAMES = ["gg.bet", "betway","loot.bet","egb","thunderpick","bet365"]
 	page_soup = getRawData(url)
+	print(url)
 	time = page_soup.find("div", {"class": "time"})
 	currentTime = str(datetime.now())
 	#'2011-05-03 17:45:35.177000'
@@ -65,11 +66,16 @@ def analyseUpcomingMatch(url):
 	res["gameID"] = gameID
 	res["scrapedAt"] = str(datetime.now())
 	if timeTillGame < 40:
-		print("Temp")
+		#print("Temp")
 		for provider in _BETTING_PROVIDERS:
+			#print(provider)
 			row = page_soup.find("tr",{"class":provider})
+			#print(row)
+			#with open("notes/temp.html", "w") as tmpfile:
+			#	tmpfile.write(page_soup.prettify())
 			odds = (row.text.strip().replace("\n","").split("-"))
 			providerName = _BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)]
+			#print(providerName)
 			try:
 				assert len(odds) == 2
 				assert str(odds[0]).replace(".","").isdigit()

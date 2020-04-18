@@ -24,8 +24,6 @@ class dbConnector():
 			HLTVID INTEGER NOT NULL UNIQUE,
 			team1ID INTEGER,
 			team2ID INTEGER,
-			team1Name TEXT,
-			team2Name TEXT,
 			scraped_at TEXT,
 			link TEXT NOT NULL
 		);
@@ -78,29 +76,38 @@ class dbConnector():
     def close_connection(self):
         self.conn.close()
 
-    def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, team1Name: str = None, team2Name: str = None, scraped_at: str =str(datetime.datetime.now())):
+    def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, scraped_at: str =str(datetime.datetime.now())):
         c = self.conn.cursor()
         tpl = (date, HLTVID, team1ID, team2ID,
-               team1Name, team2Name, scraped_at, link)
-        c.execute("""
-		INSERT INTO Matches 
-		(date, HLTVID, team1ID, team2ID, team1Name, team2Name, scraped_at, link)
-		VALUES (?,?,?,?,?,?,?,?)
-		""", tpl)
-        c.close()
-        self.conn.commit()
+               scraped_at, link)
+        try:
+            c.execute("""
+			INSERT INTO Matches
+			(date, HLTVID, team1ID, team2ID, scraped_at, link)
+			VALUES (?,?,?,?,?,?)
+			""", tpl)
+        except Exception as e:
+            print("ERROR: Match with ID: " +
+                  str(HLTVID) + " could not be added.")
+        finally:
+            c.close()
+            self.conn.commit()
 
     def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = None, killmatrix=None):
         c = self.conn.cursor()
         tpl = (map, matchID, scoreTeam1, scoreTeam2,
                individualRoundWins, link, killmatrix, HLTVID)
-        c.execute("""
-			INSERT INTO Games 
-			(map, matchID,scoreTeam1, scoreTeam2, individualRoundWins, link, killmatrix, HLTVID)
-			VALUES (?,?,?,?,?,?,?,?)
-		""", tpl)
-        c.close()
-        self.conn.commit()
+        try:
+            c.execute("""
+				INSERT INTO Games 
+				(map, matchID,scoreTeam1, scoreTeam2, individualRoundWins, link, killmatrix, HLTVID)
+				VALUES (?,?,?,?,?,?,?,?)
+			""", tpl)
+        except Exception as e:
+            print("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
+        finally:
+            c.close()
+            self.conn.commit()
 
     def updatePlayerTable(self, HLTVID: int, playerName: str):
         c = self.conn.cursor()
@@ -118,6 +125,7 @@ class dbConnector():
             self.conn.commit()
 
     def updateTeamsTable(self, Name: str, HLTVID: int, currentPlayerIDs: str):
+        # currentPlayerIDs MUST be a SORTED string like 123;234;345;567;896
         c = self.conn.cursor()
         c.execute("""
 			SELECT currentPlayerIDs FROM Teams WHERE HLTVID = ?

@@ -370,12 +370,14 @@ def scrapeDataForMatch(url):
         [int(player["playerID"]) for player in team2playerStats])])
     dbHandler.updateTeamsTable(matchDict["team1Name"], matchDict["team1ID"], team1PlayerString)
     dbHandler.updateTeamsTable(matchDict["team2Name"], matchDict["team2ID"], team2PlayerString)
-    # Info needed for GameTable
-    # GameTable Needed Data: map, matchID, scoreTeam1, scoreTeam2, link, HLTVID, individualRoundWins, killmatrix
-
-
     # Info needed for PlayerGameStatsTable
     # PlayerGameStatsTable Needed Data: playerID, gameID, kills, deaths, ADR, rating, teamID
+    # The GameID-Key in the Game-Table references the sqlite-ID, thus we need to convert the HLTVID first.
+    gameID = dbHandler.getGameID(gameDict["HLTVID"])
+    for player in team1playerStats:
+      dbHandler.updatePlayerGameStatsTable(player["playerID"], gameID, player["kills"], player["deaths"], player["ADR"], player["HLTVrating"], matchDict["team1ID"])
+    for player in team2playerStats:
+      dbHandler.updatePlayerGameStatsTable(player["playerID"], gameID, player["kills"], player["deaths"], player["ADR"], player["HLTVrating"], matchDict["team2ID"])
 
 
 def findNewMatches():

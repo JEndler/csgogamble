@@ -161,6 +161,10 @@ class dbConnector():
         c.execute("SELECT MAX(HLTVID) FROM MATCHES")
         return c.fetchone()
 
+    def getGameID(self, HLTVID):
+        c = self.conn.cursor()
+        c.execute("SELECT ID FROM GAMES WHERE HLTVID = ?", (HLTVID,))
+        return c.fetchone()[0]
 
 def main():
     connection = dbConnector()

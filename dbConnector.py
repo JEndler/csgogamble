@@ -36,7 +36,6 @@ class dbConnector():
 			scoreTeam2 INTEGER NOT NULL,
 			individualRoundWins TEXT,
 			link TEXT NOT NULL,
-			killmatrix BLOB,
 			HLTVID INTEGER UNIQUE,
 			FOREIGN KEY (matchID) REFERENCES Matches(ID)
 		);

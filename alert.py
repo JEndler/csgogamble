@@ -10,7 +10,7 @@ def get_hours_since_last_runtime():
 		last_runtime = pickle.load(f)
 	dateTimeDifference = datetime.datetime.now() - last_runtime
 	# Divide difference in seconds by number of seconds in hour (3600)  
-	dateTimeDifferenceInHours = dateTimeDifference.total_seconds() / 3600
+	dateTimeDifferenceInHours = dateTimeDifference.total_seconds() / 60/ 60
 	return int(dateTimeDifferenceInHours)
 
 def hours_since_modification(filename="/home/projects/csgogamble/data/odds.txt"):

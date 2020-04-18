@@ -86,8 +86,8 @@ class dbConnector():
 			VALUES (?,?,?,?,?,?)
 			""", tpl)
         except Exception as e:
-            errorlog("ERROR: Match with ID: " +
-                  str(HLTVID) + " could not be added.")
+            pass
+            #errorlog("ERROR: Match with ID: " + str(HLTVID) + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -103,7 +103,8 @@ class dbConnector():
 				VALUES (?,?,?,?,?,?,?)
 			""", tpl)
         except Exception as e:
-            errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
+            pass
+            #errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -117,8 +118,8 @@ class dbConnector():
 				VALUES (?,?)
 			""", tpl)
         except Exception as e:
-            errorlog("ERROR: Player with ID: " + str(HLTVID) +
-                  " and Name: " + playerName + " could not be added.")
+            pass
+            #errorlog("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -166,8 +167,6 @@ class dbConnector():
         return c.fetchone()[0]
 
     #TODO: Connect to real Log-File
-    def errorlog(errorstring):
-        pass
 
 def main():
     connection = dbConnector()

@@ -37,6 +37,8 @@ class dbConnector():
 			individualRoundWins TEXT,
 			link TEXT NOT NULL,
 			HLTVID INTEGER UNIQUE,
+            team1IDs TEXT,
+            team2IDs TEXT,
 			FOREIGN KEY (matchID) REFERENCES Matches(ID)
 		);
 
@@ -92,15 +94,15 @@ class dbConnector():
             c.close()
             self.conn.commit()
 
-    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = ""):
+    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", teamIDs: str = "", team2IDs: str = ""):
         c = self.conn.cursor()
         tpl = (map, matchID, scoreTeam1, scoreTeam2,
-               individualRoundWins, link, HLTVID)
+               individualRoundWins, link, HLTVID, team1IDs, team2IDs)
         try:
             c.execute("""
 				INSERT INTO Games 
-				(map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID)
-				VALUES (?,?,?,?,?,?,?)
+				(map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID, team1IDs, team2IDs)
+				VALUES (?,?,?,?,?,?,?,?,?)
 			""", tpl)
         except Exception as e:
             pass
@@ -166,7 +168,14 @@ class dbConnector():
         c.execute("SELECT ID FROM GAMES WHERE HLTVID = ?", (HLTVID,))
         return c.fetchone()[0]
 
+    def _getPredictiondata(self, matchID):
+        c = self.conn.cursor()
+        #Needed Team1: [], Tean2: [], IndividualRoundWins: []
+        c.execute("")
+
     #TODO: Connect to real Log-File
+    def errorlog(errorstring):
+        pass
 
 def main():
     connection = dbConnector()

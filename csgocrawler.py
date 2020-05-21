@@ -259,6 +259,10 @@ def _getGamePlayerStats(page_soup, HLTVgameID):
 
 
 def getGeneralMatchInfo(url):
+  """
+  @Params: url of a HLTV.org Match-Page
+  @returns a Dictionary containing all necessary Data for the Match-Table
+  """
   page_soup = getRawData(url)
   splitted = url.split("/")
   matchID = splitted[4]
@@ -361,8 +365,6 @@ def scrapeDataForMatch(url):
   match_soup = getRawData(url)
   for game in _getMatchGames(match_soup, matchDict["HLTVID"]):
     gameDict = getGeneralGameInfo(game["link"], url, match_soup)
-    dbHandler.updateGameTable(gameDict["map"], gameDict["matchID"], gameDict["scoreTeam1"], gameDict["scoreTeam2"],
-                              gameDict["link"], gameDict["HLTVID"], gameDict["individualRoundWins"])
     # Info needed for PlayersTable
     # PlayersTable Needed Data: HLTVID, playerName
     gameID, team1ID, team2ID, team1playerStats, team2playerStats = getGamePlayerInfo(
@@ -376,6 +378,8 @@ def scrapeDataForMatch(url):
         [int(player["playerID"]) for player in team1playerStats])])
     team2PlayerString = ";".join([str(playerID) for playerID in sorted(
         [int(player["playerID"]) for player in team2playerStats])])
+    dbHandler.updateGameTable(gameDict["map"], gameDict["matchID"], gameDict["scoreTeam1"], gameDict["scoreTeam2"],
+                              gameDict["link"], gameDict["HLTVID"], individualRoundWins = gameDict["individualRoundWins"], team1IDs = team1PlayerString, team2IDs = team2PlayerString)
     dbHandler.updateTeamsTable(matchDict["team1Name"], matchDict["team1ID"], team1PlayerString)
     dbHandler.updateTeamsTable(matchDict["team2Name"], matchDict["team2ID"], team2PlayerString)
     # Info needed for PlayerGameStatsTable
@@ -389,6 +393,10 @@ def scrapeDataForMatch(url):
 
 
 def findNewMatches():
+  """
+  @Params: None
+  @returns a list of HLTV-Match-Links for every Match thats not yet in the Database
+  """
   dbHandler = dbConnector.dbConnector()
   lastID = dbHandler.getLastMatchID()[0]
   if lastID == None: lastID = 2299427
@@ -409,6 +417,10 @@ def findNewMatches():
 
 
 def updateData():
+  """
+  This Method uses all the other Methods to update the Database
+  This should ideally be run hourly or daily.
+  """
   linklist = findNewMatches()
   linklist = linklist[::-1]
   counter = 0

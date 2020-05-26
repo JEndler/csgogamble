@@ -18,58 +18,58 @@ class dbConnector():
     def createDatabase(self):
         c = self.conn.cursor()
         command = """
-		CREATE TABLE IF NOT EXISTS Matches (
-			ID INTEGER PRIMARY KEY AUTOINCREMENT,
-			date TEXT,
-			HLTVID INTEGER NOT NULL UNIQUE,
-			team1ID INTEGER,
-			team2ID INTEGER,
-			scraped_at TEXT,
-			link TEXT NOT NULL
-		);
+        CREATE TABLE IF NOT EXISTS Matches (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            HLTVID INTEGER NOT NULL UNIQUE,
+            team1ID INTEGER,
+            team2ID INTEGER,
+            scraped_at TEXT,
+            link TEXT NOT NULL
+        );
 
-		CREATE TABLE IF NOT EXISTS Games (
-			ID INTEGER PRIMARY KEY AUTOINCREMENT,
-			map TEXT,
-			matchID INTEGER NOT NULL,
-			scoreTeam1 INTEGER NOT NULL,
-			scoreTeam2 INTEGER NOT NULL,
-			individualRoundWins TEXT,
-			link TEXT NOT NULL,
-			HLTVID INTEGER UNIQUE,
+        CREATE TABLE IF NOT EXISTS Games (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            map TEXT,
+            matchID INTEGER NOT NULL,
+            scoreTeam1 INTEGER NOT NULL,
+            scoreTeam2 INTEGER NOT NULL,
+            individualRoundWins TEXT,
+            link TEXT NOT NULL,
+            HLTVID INTEGER UNIQUE,
             team1IDs TEXT,
             team2IDs TEXT,
-			FOREIGN KEY (matchID) REFERENCES Matches(ID)
-		);
+            FOREIGN KEY (matchID) REFERENCES Matches(ID)
+        );
 
-		CREATE TABLE IF NOT EXISTS Players (
-			ID INTEGER PRIMARY KEY AUTOINCREMENT,
-			HLTVID INTEGER UNIQUE,
-			playerName TEXT
-		);
+        CREATE TABLE IF NOT EXISTS Players (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            HLTVID INTEGER UNIQUE,
+            playerName TEXT
+        );
 
-		CREATE TABLE IF NOT EXISTS Teams (
-			ID INTEGER PRIMARY KEY AUTOINCREMENT,
-			Name TEXT,
-			HLTVID INTEGER UNIQUE,
-			currentPlayerIDs TEXT,
-			lastRosterChange TEXT
-		);
+        CREATE TABLE IF NOT EXISTS Teams (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT,
+            HLTVID INTEGER UNIQUE,
+            currentPlayerIDs TEXT,
+            lastRosterChange TEXT
+        );
 
-		CREATE TABLE IF NOT EXISTS PlayerGameStats (
-			playerID INTEGER,
-			gameID INTEGER,
-			kills INTEGER,
-			deaths INTEGER,
-			ADR REAL,
-			rating REAL,
-			teamID INTEGER,
-			PRIMARY KEY (playerID, gameID),
-			FOREIGN KEY (teamID) REFERENCES Teams(ID),
-			FOREIGN KEY (playerID) REFERENCES Players(ID),
-			FOREIGN KEY (gameID) REFERENCES Games(ID)
-		);
-		"""
+        CREATE TABLE IF NOT EXISTS PlayerGameStats (
+            playerID INTEGER,
+            gameID INTEGER,
+            kills INTEGER,
+            deaths INTEGER,
+            ADR REAL,
+            rating REAL,
+            teamID INTEGER,
+            PRIMARY KEY (playerID, gameID),
+            FOREIGN KEY (teamID) REFERENCES Teams(ID),
+            FOREIGN KEY (playerID) REFERENCES Players(ID),
+            FOREIGN KEY (gameID) REFERENCES Games(ID)
+        );
+        """
         c.executescript(command)
         c.close()
         self.conn.commit()
@@ -77,19 +77,19 @@ class dbConnector():
     def close_connection(self):
         self.conn.close()
 
-    def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, scraped_at: str =str(datetime.datetime.now())):
+    def updateMatchTable(self, team1ID: int, team2ID: int, date, link: str, HLTVID: int, scraped_at: str = str(datetime.datetime.now())):
         c = self.conn.cursor()
         tpl = (date, HLTVID, team1ID, team2ID,
                scraped_at, link)
         try:
             c.execute("""
-			INSERT INTO Matches
-			(date, HLTVID, team1ID, team2ID, scraped_at, link)
-			VALUES (?,?,?,?,?,?)
-			""", tpl)
+            INSERT INTO Matches
+            (date, HLTVID, team1ID, team2ID, scraped_at, link)
+            VALUES (?,?,?,?,?,?)
+            """, tpl)
         except Exception as e:
             pass
-            #errorlog("ERROR: Match with ID: " + str(HLTVID) + " could not be added.")
+            # errorlog("ERROR: Match with ID: " + str(HLTVID) + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -100,13 +100,13 @@ class dbConnector():
                individualRoundWins, link, HLTVID, team1IDs, team2IDs)
         try:
             c.execute("""
-				INSERT INTO Games 
-				(map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID, team1IDs, team2IDs)
-				VALUES (?,?,?,?,?,?,?,?,?)
-			""", tpl)
+                INSERT INTO Games 
+                (map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID, team1IDs, team2IDs)
+                VALUES (?,?,?,?,?,?,?,?,?)
+            """, tpl)
         except Exception as e:
             pass
-            #errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
+            # errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -116,12 +116,12 @@ class dbConnector():
         tpl = (HLTVID, playerName)
         try:
             c.execute("""
-				INSERT INTO Players (HLTVID, playerName)
-				VALUES (?,?)
-			""", tpl)
+                INSERT INTO Players (HLTVID, playerName)
+                VALUES (?,?)
+            """, tpl)
         except Exception as e:
             pass
-            #errorlog("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")
+            # errorlog("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -130,20 +130,20 @@ class dbConnector():
         # currentPlayerIDs MUST be a SORTED string like 123;234;345;567;896
         c = self.conn.cursor()
         c.execute("""
-			SELECT currentPlayerIDs FROM Teams WHERE HLTVID = ?
-		""", (HLTVID, ))
-        if c.fetchone() == None:
+            SELECT currentPlayerIDs FROM Teams WHERE HLTVID = ?
+        """, (HLTVID, ))
+        if c.fetchone() is None:
             c.execute("""
-				INSERT INTO Teams (Name, HLTVID, currentPlayerIDs, lastRosterChange)
-				VALUES (?,?,?,?)
-			""", (Name, HLTVID, currentPlayerIDs, str(datetime.datetime.now())))
+                INSERT INTO Teams (Name, HLTVID, currentPlayerIDs, lastRosterChange)
+                VALUES (?,?,?,?)
+            """, (Name, HLTVID, currentPlayerIDs, str(datetime.datetime.now())))
         elif currentPlayerIDs == c.fetchone():
             pass
         else:
             c.execute("""
-				UPDATE Teams SET currentPlayerIDs=? , lastRosterChange=?
-				WHERE HLTVID = ?
-			""", (currentPlayerIDs, str(datetime.datetime.now()), HLTVID))
+                UPDATE Teams SET currentPlayerIDs=? , lastRosterChange=?
+                WHERE HLTVID = ?
+            """, (currentPlayerIDs, str(datetime.datetime.now()), HLTVID))
         c.close()
         self.conn.commit()
 
@@ -151,10 +151,10 @@ class dbConnector():
         c = self.conn.cursor()
         tpl = (playerID, gameID, kills, deaths, ADR, rating, teamID)
         c.execute("""
-			INSERT INTO PlayerGameStats 
-			(playerID, gameID, kills, deaths, ADR, rating, teamID)
-			VALUES (?,?,?,?,?,?,?)
-		""", tpl)
+            INSERT INTO PlayerGameStats
+            (playerID, gameID, kills, deaths, ADR, rating, teamID)
+            VALUES (?,?,?,?,?,?,?)
+        """, tpl)
         c.close()
         self.conn.commit()
 
@@ -170,12 +170,13 @@ class dbConnector():
 
     def _getPredictiondata(self, matchID):
         c = self.conn.cursor()
-        #Needed Team1: [], Tean2: [], IndividualRoundWins: []
+        # Needed Team1: [], Tean2: [], IndividualRoundWins: []
         c.execute("")
 
-    #TODO: Connect to real Log-File
+    # TODO: Connect to real Log-File
     def errorlog(errorstring):
         pass
+
 
 def main():
     connection = dbConnector()

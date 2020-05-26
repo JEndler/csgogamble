@@ -8,8 +8,6 @@ Current Info:
 
 Needed:
 	- Players
-	-
-
 
 Games als eigene Tabelle auslagern?
 	- An die Maps koppeln

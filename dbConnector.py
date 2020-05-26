@@ -94,7 +94,7 @@ class dbConnector():
             c.close()
             self.conn.commit()
 
-    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", teamIDs: str = "", team2IDs: str = ""):
+    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", team1IDs: str = "", team2IDs: str = ""):
         c = self.conn.cursor()
         tpl = (map, matchID, scoreTeam1, scoreTeam2,
                individualRoundWins, link, HLTVID, team1IDs, team2IDs)

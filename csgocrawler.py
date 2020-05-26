@@ -16,7 +16,7 @@ _UAGENT = '''Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KO
   AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'''
 
 
-def getRawData(url, useragent=_UAGENT, waittime=2):
+def getRawData(url, useragent=_UAGENT, waittime=16):
     """
     returns a bs4.soup-Object of the given url
 

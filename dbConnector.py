@@ -168,10 +168,38 @@ class dbConnector():
         c.execute("SELECT ID FROM GAMES WHERE HLTVID = ?", (HLTVID,))
         return c.fetchone()[0]
 
-    def _getPredictiondata(self, matchID):
+    def _getPredictiondata(self, gameID):
         c = self.conn.cursor()
         # Needed Team1: [], Tean2: [], IndividualRoundWins: []
-        c.execute("")
+        c.execute("SELECT playerID, teamID FROM PlayerGameStats WHERE gameID = ?", (gameID, ))
+        players = c.fetchall()
+        data = {}
+        data["gameID"] = gameID
+        for player in players:
+            if player[1] in data:
+                data[player[1]].append(player[0])
+            else:
+                data[player[1]] = [player[0]]
+        c.execute("SELECT matchID FROM Games WHERE ID = ?", (gameID, ))
+        data["matchHLTVID"] = c.fetchone()[0]
+        c.execute("SELECT team1ID, team2ID FROM Matches WHERE HLTVID = ?", (data["matchHLTVID"], ))
+        teams = c.fetchone()
+        c.execute("SELECT map, scoreTeam1, scoreTeam2, individualRoundWins FROM Games WHERE ID = ?", (gameID, ))
+        gamedata = c.fetchone()
+        if gamedata[1] == gamedata[2]:
+            data["winner"] = None
+        elif gamedata[1] > gamedata[2]:
+            data["winner"] = teams[0]
+        else:
+            data["winner"] = teams[1]
+        data["map"] = gamedata[0]
+        data["team1"] = teams[0]
+        data["team2"] = teams[1]
+        data["scoreTeam1"] = gamedata[1]
+        data["scoreTeam2"] = gamedata[2]
+        data["individualRoundWins"] = gamedata[3]
+        c.close()
+        return data
 
     # TODO: Connect to real Log-File
     def errorlog(errorstring):
@@ -180,7 +208,7 @@ class dbConnector():
 
 def main():
     connection = dbConnector()
-    connection.createDatabase()
+    #connection.createDatabase()
     print(connection.getLastMatchID())
     connection.close_connection()
     print("Success")

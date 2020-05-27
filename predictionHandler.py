@@ -26,7 +26,7 @@ class TrueskillHandler():
     CONFIG_PATH = None
 
     def __init__(self, DB_FILEPATH="data/trueskill.db", CONFIG_PATH="data/trueskill.conf"):
-        assert os.path.exists(CONFIG_FILEPATH), "No Config File found"
+        assert os.path.exists(CONFIG_PATH), "No Config File found"
         assert os.path.exists(DB_FILEPATH), "No Database File found"
         self.DB_FILEPATH = DB_FILEPATH
         self.CONFIG_PATH = CONFIG_PATH

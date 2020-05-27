@@ -49,12 +49,11 @@ class TrueskillHandler():
         c.close()
         self.conn.commit()
 
-    def loadData(self, matchID):
+    def loadData(self, gameID):
         connection = dbConnector()
-
-        # Info Needed: Team1:[], Team2:[], IndividualRoundWins:[]
-
+        data = connection._getPredictiondata(gameID)
         connection.close_connection()
+        return data
 
     def get_rating(self, playerID):
         c = self.conn.cursor()

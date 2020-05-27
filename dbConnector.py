@@ -87,24 +87,24 @@ class dbConnector():
             (date, HLTVID, team1ID, team2ID, scraped_at, link)
             VALUES (?,?,?,?,?,?)
             """, tpl)
-        except Exception as e:
+        except Exception:
             pass
             # errorlog("ERROR: Match with ID: " + str(HLTVID) + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
 
-    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", teamIDs: str = "", team2IDs: str = ""):
+    def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", team1IDs: str = "", team2IDs: str = ""):
         c = self.conn.cursor()
         tpl = (map, matchID, scoreTeam1, scoreTeam2,
                individualRoundWins, link, HLTVID, team1IDs, team2IDs)
         try:
             c.execute("""
-                INSERT INTO Games 
+                INSERT INTO Games
                 (map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID, team1IDs, team2IDs)
                 VALUES (?,?,?,?,?,?,?,?,?)
             """, tpl)
-        except Exception as e:
+        except Exception:
             pass
             # errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
         finally:
@@ -119,7 +119,7 @@ class dbConnector():
                 INSERT INTO Players (HLTVID, playerName)
                 VALUES (?,?)
             """, tpl)
-        except Exception as e:
+        except Exception:
             pass
             # errorlog("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")
         finally:

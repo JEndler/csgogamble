@@ -106,7 +106,8 @@ class TrueskillHandler():
 def main():
     TH = TrueskillHandler()
     TH.createDatabase()
-    # TH._initialize_player(7710)
+    print(TH.loadData(1))
+    TH._initialize_player(7710)
     print(TH.get_rating(7710))
     print(TH._load_config())
 

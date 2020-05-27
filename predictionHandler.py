@@ -50,7 +50,7 @@ class TrueskillHandler():
         self.conn.commit()
 
     def loadData(self, gameID):
-        connection = dbConnector()
+        connection = dbConnector.dbConnector()
         data = connection._getPredictiondata(gameID)
         connection.close_connection()
         return data

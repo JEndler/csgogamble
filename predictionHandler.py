@@ -15,6 +15,7 @@ import sqlite3
 import pickle
 import os.path
 import dbConnector
+import ast
 
 
 class TrueskillHandler():
@@ -53,6 +54,7 @@ class TrueskillHandler():
         connection = dbConnector.dbConnector()
         data = connection._getPredictiondata(gameID)
         connection.close_connection()
+        assert data["individualRoundWins"] != '-1', "There are no IndividualRoundWins for this Match, skipping..."
         return data
 
     def get_rating(self, playerID):
@@ -102,13 +104,36 @@ class TrueskillHandler():
         assert isinstance(team1, list) and isinstance(team2, list), "Teams need to be a list"
         assert len(team1) == 5 and len(team2) == 5, "Teams need to be exactly 5 players each"
 
+    def _calculateSingleMatch(self, data):
+        teams = (data["team1"], data["team2"])
+
+        def _cleanRoundWinsList(roundWins):
+            individualRoundWins = ast.literal_eval(roundWins)
+            individualRoundWins.insert(0, '0-0')
+            roundWinners = []
+            for Round in individualRoundWins:
+                if Round == '0-0':
+                    continue
+                split = Round.split("-")
+                prevSplit = individualRoundWins[individualRoundWins.index(Round) - 1].split("-")
+                team1 = int(split[0]) - int(prevSplit[0])
+                team2 = int(split[1]) - int(prevSplit[1])
+                if team1 == 1:
+                    roundWinners.append(1)
+                if team2 == 1: roundWinners.append(2)
+            return roundWinners
+
+        roundWins = _cleanRoundWinsList(data["individualRoundWins"])
+        for winnerTeam in roundWins:
+            self.modify_rating(data[data["team1"]], data[data["team2"]], winnerTeam)
+        if self.debug: print("Calculated GameID: " + data["gameID"])
+
 
 def main():
     TH = TrueskillHandler()
     TH.createDatabase()
-    print(TH.loadData(1))
-    TH._initialize_player(7710)
-    print(TH.get_rating(7710))
+    print(TH.loadData(2777))
+    TH._calculateSingleMatch(TH.loadData(2777))
     print(TH._load_config())
 
 

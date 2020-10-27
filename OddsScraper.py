@@ -5,16 +5,23 @@ from urllib.request import Request
 from bs4 import BeautifulSoup as soup
 from datetime import datetime
 import json
+import time
 
-def getRawData(url):
+def getRawData(url, waittime=16):
 
     # User Agent Mozilla to Circumvent Security Blocking
     req = Request(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:47.0) Gecko/20100101 Firefox/47.0'})
 
     # Connect and Save the HTML Page
-    uClient = urlopen(req)
-    page_html = uClient.read()
-    uClient.close()
+    try:
+        uClient = urlopen(req)
+        page_html = uClient.read()
+        uClient.close()
+    except Exception:
+        print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
+        time.sleep(waittime)
+        return getRawData(url, waittime=waittime * 2)
+
 
     # Parse HTML
     page_soup = soup(page_html, "html.parser")
@@ -24,10 +31,10 @@ def getRawData(url):
 def findMatchLinks(page_soup, date=None):
     match_link_list = []
     matchday = page_soup.find("div", {"class": "upcoming-matches"})
-    matchday = matchday.find("div", {"class": "match-day"})
+    matchday = page_soup.find("div", {"class": "upcomingMatchesContainer"})
     for link in matchday.findAll("a", {"href": True}):
         print("found match")
-        if "matches" in str(link["href"]):
+        if "/matches/" in str(link["href"]):
             match_link_list.append("https://www.hltv.org" + str(link['href']))
     return match_link_list
 
@@ -39,12 +46,12 @@ def analyseUpcomingMatch(url):
                                   " gprov_egb betting_provider",
                                   "thunderpick-odds gprov_thunderpick betting_provider",
                                   " gprov_bet365 betting_provider"]
-    _BETTING_PROVIDERS = ["gprov_gv4nx914 provider",
-                          "gprov_p2g0jzml provider",
-                          "gprov_nz6cnayl provider",
-                          "gprov_egb provider",
-                          "thunderpick-odds gprov_thunderpick provider",
-                          "gprov_3etkx6rj provider"]
+    _BETTING_PROVIDERS = [" gprov_gv4nx914 provider",
+                          " gprov_p2g0jzml provider",
+                          " gprov_nz6cnayl provider",
+                          " gprov_egb provider",
+                          " thunderpick-odds gprov_thunderpick provider",
+                          " gprov_3etkx6rj provider"]
     _BETTING_PROVIDER_NAMES = ["gg.bet", "betway", "loot.bet", "egb", "thunderpick", "bet365"]
     page_soup = getRawData(url)
     print(url)
@@ -65,11 +72,12 @@ def analyseUpcomingMatch(url):
     if timeTillGame < 40:
         # print("Temp")
         for provider in _BETTING_PROVIDERS:
-            # print(provider)
             row = page_soup.find("tr", {"class": provider})
-            # print(row)
-            # with open("notes/temp.html", "w") as tmpfile:
-            #   tmpfile.write(page_soup.prettify())
+            if row is None:
+                row = page_soup.find("tr", {"class": provider.strip()})
+            if row is None: continue
+            #with open("notes/temp.html", "w") as tmpfile:
+            #    tmpfile.write(page_soup.prettify())
             odds = (row.text.strip().replace("\n", "").split("-"))
             providerName = _BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)]
             # print(providerName)
@@ -81,7 +89,8 @@ def analyseUpcomingMatch(url):
             except AssertionError:
                 print("No Odds Data for Provider: " + providerName + " with GameID: " + str(gameID))
         print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
-        writeOddsToFile(res)
+        print(res)
+        #writeOddsToFile(res)
 
 
 def writeOddsToFile(resdict):

@@ -1,5 +1,4 @@
-from urllib.request import urlopen
-from urllib.request import Request
+from requests import request
 from bs4 import BeautifulSoup as soup
 import pandas as pd
 import datetime
@@ -15,6 +14,16 @@ Relevant Data can be found in the "DatabaseLayout.PNG" File
 _UAGENT = '''Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KOT49H)
   AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'''
 
+# proxy.txt needs to contain NordVPN Proxy Username and Password
+# try:
+#     with open("proxy.txt", "r") as proxyfile:
+#         s = proxyfile.readline().split(";")
+#         PROXY_USR, PROXY_PW = s[0].strip(), s[1].strip()
+#     print(str("https://" + PROXY_USR + ":" + PROXY_PW + "@de867.nordvpn.com"))
+# except Exception:
+#     PROXY_USR, PROXY_PW = None, None
+PROXY_USR, PROXY_PW = None, None
+
 
 def getRawData(url, useragent=_UAGENT, waittime=16):
     """
@@ -23,16 +32,23 @@ def getRawData(url, useragent=_UAGENT, waittime=16):
     @Params: url: a string-url for a HLTV-Match page
     @returns a bs4.soup-Object
     """
-
-    # User Agent Mozilla to Circumvent Security Blocking
-    req = Request(url, headers={'User-Agent': useragent})
-
     try:
         # Connect and Save the HTML Page
-        uClient = urlopen(req)
-        page_html = uClient.read()
-        uClient.close()
-    except Exception:
+        # Check if Proxy Settings are available
+        if (PROXY_USR, PROXY_PW) != (None, None):
+            # User Agent Mozilla to Circumvent Security Blocking
+            req = request(
+                "GET",
+                url,
+                proxies={
+                    'https': str("https://" + PROXY_USR + ":" + PROXY_PW + "@de867.nordvpn.com")
+                })
+        else:
+            req = request("GET", url)
+        page_html = req.text
+
+    except Exception as e:
+        print(e)
         print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
         time.sleep(waittime)
         return getRawData(url, waittime=waittime * 2)
@@ -413,7 +429,7 @@ def findNewMatches():
         nextpage = findLinkToNextPage(page_soup)
         print("Analysing Match No:" + str(len(res)))
         page_soup = getRawData(nextpage)
-    print(len(res))
+        return res
 
 
 def updateData():

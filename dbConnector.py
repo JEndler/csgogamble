@@ -182,7 +182,7 @@ class dbConnector():
                 data[player[1]] = [player[0]]
         c.execute("SELECT matchID FROM Games WHERE ID = ?", (gameID, ))
         data["matchHLTVID"] = c.fetchone()[0]
-        c.execute("SELECT team1ID, team2ID FROM Matches WHERE HLTVID = ?", (data["matchHLTVID"], ))
+        c.execute("SELECT team1ID, team2ID, link FROM Matches WHERE HLTVID = ?", (data["matchHLTVID"], ))
         teams = c.fetchone()
         c.execute("SELECT map, scoreTeam1, scoreTeam2, individualRoundWins FROM Games WHERE ID = ?", (gameID, ))
         gamedata = c.fetchone()
@@ -198,6 +198,7 @@ class dbConnector():
         data["scoreTeam1"] = gamedata[1]
         data["scoreTeam2"] = gamedata[2]
         data["individualRoundWins"] = gamedata[3]
+        data["link"] = teams[2]
         c.close()
         return data
 

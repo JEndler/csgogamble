@@ -32,7 +32,8 @@ def getRawData(url, useragent=_UAGENT, waittime=16):
         uClient = urlopen(req)
         page_html = uClient.read()
         uClient.close()
-    except Exception:
+    except Exception as e:
+        print(e)
         print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
         time.sleep(waittime)
         return getRawData(url, waittime=waittime * 2)

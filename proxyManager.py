@@ -95,27 +95,27 @@ class ProxyManager():
     def _debug(self, s):
         if self.debug: print("proxyManager: " + str(s))
 
-    def proxiedRequest(self, url, request="GET"):
+    def proxiedRequest(self, url, requesttype="GET"):
         # TODO Add automatic User-Agent switching
         proxy = self.getProxy()
         try:
             # Connect and Save the HTML Page
             # User Agent Mozilla to Circumvent Security Blocking
-            req = request(
-                request,
+            req = requests.request(
+                requesttype,
                 url,
                 proxies={
-                    'https': proxy
+                    'http': proxy
                 })
             page_html = req.text
         except Exception as e:
             # If its a HTTP-429 -> rotate to another Proxy
-            if "HTTP Error 429" in e:
-                return self.proxiedRequest(url, request)
+            if "HTTP Error 429" in str(e):
+                return self.proxiedRequest(url, requesttype)
             # If its a Timeout Error -> delete current Proxy
             else:
                 self._delProxy(proxy)
-                return self.proxiedRequest(url, request)
+                return self.proxiedRequest(url, requesttype)
         return page_html
 
     def _delProxy(self, proxy):

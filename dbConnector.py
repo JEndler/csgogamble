@@ -9,7 +9,6 @@ import datetime
 
 
 class dbConnector():
-    conn = None
     DB_FILEPATH = "data/csgodata.db"
 
     def __init__(self):
@@ -168,6 +167,11 @@ class dbConnector():
         c.execute("SELECT ID FROM GAMES WHERE HLTVID = ?", (HLTVID,))
         return c.fetchone()[0]
 
+    def loadGamesUntilDay(self, Day):
+        c = self.conn.cursor()
+        c.execute("SELECT GAMES.ID FROM GAMES JOIN MATCHES ON GAMES.MATCHID=MATCHES.HLTVID WHERE MATCHES.DATE < ? AND GAMES.INDIVIDUALROUNDWINS != '-1'", (Day,))
+        return [x[0] for x in c.fetchall()]
+
     def _getPredictiondata(self, gameID):
         c = self.conn.cursor()
         # Needed Team1: [], Tean2: [], IndividualRoundWins: []
@@ -182,7 +186,7 @@ class dbConnector():
                 data[player[1]] = [player[0]]
         c.execute("SELECT matchID FROM Games WHERE ID = ?", (gameID, ))
         data["matchHLTVID"] = c.fetchone()[0]
-        c.execute("SELECT team1ID, team2ID FROM Matches WHERE HLTVID = ?", (data["matchHLTVID"], ))
+        c.execute("SELECT team1ID, team2ID, link FROM Matches WHERE HLTVID = ?", (data["matchHLTVID"], ))
         teams = c.fetchone()
         c.execute("SELECT map, scoreTeam1, scoreTeam2, individualRoundWins FROM Games WHERE ID = ?", (gameID, ))
         gamedata = c.fetchone()
@@ -198,6 +202,7 @@ class dbConnector():
         data["scoreTeam1"] = gamedata[1]
         data["scoreTeam2"] = gamedata[2]
         data["individualRoundWins"] = gamedata[3]
+        data["link"] = teams[2]
         c.close()
         return data
 

@@ -5,6 +5,7 @@ import datetime
 import dbConnector
 import time
 import json
+import proxyManager as pM
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
@@ -22,7 +23,7 @@ _UAGENT = '''Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KO
 #     print(str("https://" + PROXY_USR + ":" + PROXY_PW + "@de867.nordvpn.com"))
 # except Exception:
 #     PROXY_USR, PROXY_PW = None, None
-PROXY_USR, PROXY_PW = None, None
+proxies = pM.ProxyManager()
 
 
 def getRawData(url, useragent=_UAGENT, waittime=16):
@@ -35,17 +36,8 @@ def getRawData(url, useragent=_UAGENT, waittime=16):
     try:
         # Connect and Save the HTML Page
         # Check if Proxy Settings are available
-        if (PROXY_USR, PROXY_PW) != (None, None):
-            # User Agent Mozilla to Circumvent Security Blocking
-            req = request(
-                "GET",
-                url,
-                proxies={
-                    'https': str("https://" + PROXY_USR + ":" + PROXY_PW + "@de867.nordvpn.com")
-                })
-        else:
-            req = request("GET", url)
-        page_html = req.text
+        # User Agent Mozilla to Circumvent Security Blocking
+        page_html = proxies.proxiedRequest(url)
 
     except Exception as e:
         print(e)
@@ -454,7 +446,6 @@ def main():
     starttime = datetime.datetime.now()
     updateData()
     timedelta = datetime.datetime.now() - starttime
-    print(timedelta)
     print("The Webscraper took: " + str(int(timedelta.total_seconds() / 60)) + " Minutes to complete.")
 
 

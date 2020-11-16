@@ -66,8 +66,9 @@ class ProxyManager():
                     continue
                 self._debug(r.text)
                 working_proxies.append(prxy)
-            except Exception:
-                self._debug("Proxy #" + str(proxys.index(prxy)) + " resulted in a timeout.")
+            except Exception as e:
+                self._debug("Proxy #" + str(proxys.index(prxy)) + " failed.")
+                self._debug(e)
                 pass
         self._writeProxiesToFile(working_proxies)
         return working_proxies

@@ -16,6 +16,8 @@ import pickle
 import os.path
 import dbConnector
 import ast
+import time
+from OddsScraper import loadOdds
 
 
 class TrueskillHandler():
@@ -58,8 +60,12 @@ class TrueskillHandler():
     def get_rating(self, playerID):
         c = self.conn.cursor()
         try:
-            c.execute("SELECT rating FROM Players WHERE HLTVID = ?", (playerID,))
-            rating = pickle.loads(c.fetchone()[0])
+            c.execute("SELECT rating FROM Players WHERE HLTVID = ?", (int(playerID),))
+            output = c.fetchone()
+            if output is None:
+                self._initialize_player(playerID)
+                return self.get_rating(playerID)
+            rating = pickle.loads(output[0])
         except Exception as e:
             print(e)
             c.close()
@@ -84,7 +90,6 @@ class TrueskillHandler():
 
     def set_rating(self, playerID, rating):
         curr = self.conn.cursor()
-        print(str(playerID) + " - " + str(rating))
         pdata = pickle.dumps(rating, pickle.HIGHEST_PROTOCOL)
         curr.execute("UPDATE Players SET rating = ? WHERE HLTVID = ?", (sqlite3.Binary(pdata), playerID))
         curr.close()
@@ -142,31 +147,37 @@ class TrueskillHandler():
             return roundWinners
 
         roundWins = _cleanRoundWinsList(data["individualRoundWins"])
-        print(roundWins)
         for winnerTeam in roundWins:
             self.modify_rating(data[data["team1"]], data[data["team2"]], winnerTeam)
         if self.debug: print("Calculated GameID: " + str(data["gameID"]))
 
+    def _calculateMatches(self, gameIDs):
+        for game in gameIDs:
+            try:
+                data = self.loadData(game)
+                self._calculateSingleMatch(data)
+            except Exception as e:
+                print("Failed to calculate Match " + str(game) + " with Error:")
+                print(e)
+
 
 def main():
-    TH = TrueskillHandler()
+    TH = TrueskillHandler(debug=True)
     TH.createDatabase()
-    data = TH.loadData(2777)
-    print(data)
-    team1_id, team2_id = data["team1"], data["team2"]
-    print("Team 1 Ratings before Match")
-    print(TH._loadTeamRating(data[team1_id]))
-    print("Team 2 Ratings before Match")
-    print(TH._loadTeamRating(data[team2_id]))
-    print("Win Probability before Match")
-    print(TH.win_probability(TH._loadTeamRating(data[team1_id]), TH._loadTeamRating(data[team2_id])))
-    TH._calculateSingleMatch(TH.loadData(2777))
-    print("Team 1 Ratings after Match")
-    print(TH._loadTeamRating(data[team1_id]))
-    print("Team 2 Ratings after Match")
-    print(TH._loadTeamRating(data[team2_id]))
-    print("Win Probability after Match")
-    print(TH.win_probability(TH._loadTeamRating(data[team1_id]), TH._loadTeamRating(data[team2_id])))
+    odds = loadOdds()
+    firstDayWithOdds = sorted([(x['scrapedAt']) for x in odds])[0].split(" ")[0]
+    print(firstDayWithOdds)
+    connection = dbConnector.dbConnector()
+    data = connection.loadGamesUntilDay(firstDayWithOdds)
+    connection.close_connection()
+    print("Calculating Rating based on " + str(int(len(data))) + " Games...")
+    start = time.time()
+    TH._calculateMatches(data)
+    print("Calculating Matches took " + str(time.time() + start) + " Seconds.")
+    testdata = TH.loadData(60115)
+    team1_id, team2_id = testdata["team1"], testdata["team2"]
+    print(TH.win_probability(TH._loadTeamRating(testdata[team1_id]), TH._loadTeamRating(testdata[team2_id])))
+    # TH._calculateSingleMatch(TH.loadData(2777))
 
 
 if __name__ == "__main__":

@@ -9,7 +9,6 @@ import datetime
 
 
 class dbConnector():
-    conn = None
     DB_FILEPATH = "data/csgodata.db"
 
     def __init__(self):
@@ -167,6 +166,11 @@ class dbConnector():
         c = self.conn.cursor()
         c.execute("SELECT ID FROM GAMES WHERE HLTVID = ?", (HLTVID,))
         return c.fetchone()[0]
+
+    def loadGamesUntilDay(self, Day):
+        c = self.conn.cursor()
+        c.execute("SELECT GAMES.ID FROM GAMES JOIN MATCHES ON GAMES.MATCHID=MATCHES.HLTVID WHERE MATCHES.DATE < ? AND GAMES.INDIVIDUALROUNDWINS != '-1'", (Day,))
+        return [x[0] for x in c.fetchall()]
 
     def _getPredictiondata(self, gameID):
         c = self.conn.cursor()

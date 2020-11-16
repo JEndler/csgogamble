@@ -30,12 +30,13 @@ class TrueskillHandler():
         assert os.path.exists(DB_FILEPATH), "No Database File found"
         self.DB_FILEPATH = DB_FILEPATH
         self.CONFIG_PATH = CONFIG_PATH
+        self.lastCalculatedGame = self._load_config()
         self.conn = sqlite3.connect(self.DB_FILEPATH)
         self.debug = debug
 
     def _load_config(self):
         with open(self.CONFIG_PATH, "r") as configfile:
-            return configfile.readline().split("=")[1].strip()
+            return int(configfile.readline().split("=")[1].strip())
 
     def createDatabase(self):
         c = self.conn.cursor()
@@ -153,6 +154,8 @@ class TrueskillHandler():
 
     def _calculateMatches(self, gameIDs):
         for game in gameIDs:
+            if game <= self.lastCalculatedGame:
+                continue
             try:
                 data = self.loadData(game)
                 self._calculateSingleMatch(data)

@@ -113,7 +113,6 @@ def cleanupOddsfile():
             count[tmpdict["gameID"]] += 1
         else:
             count[tmpdict["gameID"]] = 1
-    print(count)
     for line in lines:
         gameID = line.split('"')[3]
         if count[gameID] == 1:
@@ -123,6 +122,13 @@ def cleanupOddsfile():
     with open("data/odds.txt", "w", encoding='utf-8') as oddsfile:
         oddsfile.writelines(lines)
 
+def loadOdds(filepath="data/odds.txt"):
+    cleanupOddsfile()
+    odds = []
+    with open(filepath, 'r') as oddsfile:
+        for line in oddsfile:
+            odds.append(json.loads(line))
+    return odds
 
 def main():
     _HLTV_MATCHES = "https://www.hltv.org/matches"

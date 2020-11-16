@@ -53,6 +53,9 @@ class ProxyManager():
         working_proxies = []
         self._debug("Checking Proxies loaded from: " + self.filepath)
         self._debug(str(len(proxys)) + " Proxies loaded.")
+        r = requests.get('http://api.myip.com')
+        default_ip = r.text
+        print("Current IP is: " + default_ip)
         for prxy in proxys:
             try:
                 proxies = {'http': prxy}

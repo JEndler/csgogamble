@@ -90,7 +90,7 @@ class ProxyManager():
         self.proxy_list = self.loadProxiesFromFile()
 
     def _debug(self, s):
-        if self.debug: print("proxyManager: " + s)
+        if self.debug: print("proxyManager: " + str(s))
 
     def proxiedRequest(self, url, request="GET"):
         # TODO Add automatic User-Agent switching

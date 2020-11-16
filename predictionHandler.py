@@ -164,6 +164,14 @@ class TrueskillHandler():
                 print(e)
 
 
+class predictionHandler():
+    def __init__(self):
+        self.TH = TrueskillHandler()
+
+    def predictGame(self, url):
+        pass
+
+
 def main():
     TH = TrueskillHandler(debug=True)
     TH.createDatabase()

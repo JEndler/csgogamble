@@ -4,11 +4,11 @@ import os
 
 
 class ProxyManager():
-    def __init__(self, debug=True, timeout=15):
+    def __init__(self, debug=True, timeout=15, validateProxies=True):
         self.debug = debug
         self.filepath = "data/proxies.csv"
         self.timeout = timeout
-        self._checkSavedProxies()
+        if validateProxies: self._checkSavedProxies()
         self.proxy_list = self.loadProxiesFromFile()
         self.LAST_USED_PROXY_INDEX = None
         # self.proxy_list = self._getNewProxies()

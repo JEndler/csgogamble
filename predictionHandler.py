@@ -68,7 +68,7 @@ class TrueskillHandler():
                 return self.get_rating(playerID)
             rating = pickle.loads(output[0])
         except Exception as e:
-            print(e)
+            self._debug(e)
             c.close()
             return None
         c.close()
@@ -83,8 +83,8 @@ class TrueskillHandler():
             tpl = (str(playerID), rating_blob)
             c.execute("INSERT INTO Players (HLTVID, rating) VALUES (?,?)", tpl)
         except Exception as e:
-            print("Something went wrong when creating the Player Rating for Player: " + str(playerID))
-            print("Error Message:" + str(e))
+            self._debug("Something went wrong when creating the Player Rating for Player: " + str(playerID))
+            self._debug("Error Message:" + str(e))
         finally:
             c.close()
             self.conn.commit()
@@ -150,7 +150,7 @@ class TrueskillHandler():
         roundWins = _cleanRoundWinsList(data["individualRoundWins"])
         for winnerTeam in roundWins:
             self.modify_rating(data[data["team1"]], data[data["team2"]], winnerTeam)
-        if self.debug: print("Calculated GameID: " + str(data["gameID"]))
+        self._debug("Calculated GameID: " + str(data["gameID"]))
 
     def _calculateMatches(self, gameIDs):
         for game in gameIDs:
@@ -160,16 +160,33 @@ class TrueskillHandler():
                 data = self.loadData(game)
                 self._calculateSingleMatch(data)
             except Exception as e:
-                print("Failed to calculate Match " + str(game) + " with Error:")
-                print(e)
+                self._debug("Failed to calculate Match " + str(game) + " with Error:")
+                self._debug(e)
+
+    def predictGame(self, gameID):
+        testdata = self.loadData(gameID)
+        team1_id, team2_id = testdata["team1"], testdata["team2"]
+        team1win = self.win_probability(self._loadTeamRating(testdata[team1_id]), self._loadTeamRating(testdata[team2_id]))
+        self._debug("Probability for Team 1 to win: " + str(team1win))
+        return team1win
+
+    def _debug(self, s):
+        if self.debug: print("TrueskillHandler: " + str(s))
 
 
 class predictionHandler():
-    def __init__(self):
+    def __init__(self, debug=True):
         self.TH = TrueskillHandler()
+        self.debug = debug
 
-    def predictGame(self, url):
-        pass
+    def predict(self, team1, team2):
+        # Teams are lists of PlayerIDs
+        TH_prediction = self.TH.win_probability(self.TH._loadTeamRating(team1), self.TH._loadTeamRating(team2))
+        TH_prediction = (round(TH_prediction, 2), round((1 - TH_prediction), 2))
+        return TH_prediction
+
+    def _debug(self, s):
+        if self.debug: print("predictionHandler: " + str(s))
 
 
 def main():

@@ -172,6 +172,11 @@ class dbConnector():
         c.execute("SELECT GAMES.ID FROM GAMES JOIN MATCHES ON GAMES.MATCHID=MATCHES.HLTVID WHERE MATCHES.DATE < ? AND GAMES.INDIVIDUALROUNDWINS != '-1'", (Day,))
         return [x[0] for x in c.fetchall()]
 
+    def getMatchID(self, gameID):
+        c = self.conn.cursor()
+        c.execute("SELECT MATCHID FROM GAMES WHERE HLTVID = ?", (gameID,))
+        return c.fetchone()[0]
+
     def _getPredictiondata(self, gameID):
         c = self.conn.cursor()
         # Needed Team1: [], Tean2: [], IndividualRoundWins: []

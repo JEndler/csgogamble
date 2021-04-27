@@ -23,7 +23,7 @@ _UAGENT = '''Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KO
 #     print(str("https://" + PROXY_USR + ":" + PROXY_PW + "@de867.nordvpn.com"))
 # except Exception:
 #     PROXY_USR, PROXY_PW = None, None
-proxies = pM.ProxyManager()
+proxies = pM.ProxyManager(validateProxies=False)
 
 
 def getRawData(url, useragent=_UAGENT, waittime=16):
@@ -313,6 +313,28 @@ def getGeneralGameInfo(gameurl, matchurl, match_soup):
     return gameDict
 
 
+def _analyseTeamTable(page_soup, teamID):
+    res = []
+    for playerrow in page_soup.find_all("tr"):
+        playerdict = {}
+        playertextsplit = playerrow.text.strip().split("\n")
+        if playertextsplit[1] == '':
+            continue
+        playerdict["playerID"] = str(playerrow.find(
+            "a", {"href": True})["href"]).split("/")[2]
+        playerdict["playerName"] = playertextsplit[1]
+        playerdict["kills"] = playertextsplit[4].split("-")[0]
+        playerdict["deaths"] = playertextsplit[4].split("-")[1]
+        if len(playertextsplit) > 7:
+            playerdict["ADR"] = playertextsplit[6]
+            playerdict["HLTVrating"] = playertextsplit[8]
+        else:
+            playerdict["ADR"] = -1
+            playerdict["HLTVrating"] = -1
+        res.append(playerdict)
+    return remove_dupe_dicts_in_list(res)
+
+
 def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
     gameID = gameurl.split("/")[6]
     playertable = match_soup.find("div", {"id": str(gameID) + "-content"})
@@ -326,27 +348,6 @@ def getGamePlayerInfo(gameurl, matchurl, match_soup, game_soup):
         "href"].split("/")[2]
     team2ID = teamtables[1].find("a", {"class": "teamName team"})[
         "href"].split("/")[2]
-
-    def _analyseTeamTable(page_soup, teamID):
-        res = []
-        for playerrow in page_soup.find_all("tr"):
-            playerdict = {}
-            playertextsplit = playerrow.text.strip().split("\n")
-            if playertextsplit[1] == '':
-                continue
-            playerdict["playerID"] = str(playerrow.find(
-                "a", {"href": True})["href"]).split("/")[2]
-            playerdict["playerName"] = playertextsplit[1]
-            playerdict["kills"] = playertextsplit[4].split("-")[0]
-            playerdict["deaths"] = playertextsplit[4].split("-")[1]
-            if len(playertextsplit) > 7:
-                playerdict["ADR"] = playertextsplit[6]
-                playerdict["HLTVrating"] = playertextsplit[8]
-            else:
-                playerdict["ADR"] = -1
-                playerdict["HLTVrating"] = -1
-            res.append(playerdict)
-        return remove_dupe_dicts_in_list(res)
 
     team1playerStats = _analyseTeamTable(teamtables[0], team1ID)
     team2playerStats = _analyseTeamTable(teamtables[1], team2ID)
@@ -443,6 +444,7 @@ def updateData():
 
 
 def main():
+    proxies.proxy_list = proxies._checkSavedProxies()
     starttime = datetime.datetime.now()
     updateData()
     timedelta = datetime.datetime.now() - starttime

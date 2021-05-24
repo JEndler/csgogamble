@@ -408,7 +408,9 @@ def findNewMatches():
     dbHandler = dbConnector.dbConnector()
     lastID = dbHandler.getLastMatchID()[0]
     if lastID is None:
-        lastID = 2299427
+        lastID = 2328088
+    # Load all Matches sarting at November 2018
+    # https://www.hltv.org/matches/2328088/astralis-vs-north-esl-pro-league-season-8-europe
     print("Last Scraped Match found with ID: " + str(lastID))
     HLTVLINK = "https://www.hltv.org/results"
     page_soup = getRawData(HLTVLINK)

@@ -218,7 +218,7 @@ class dbConnector():
 
 def main():
     connection = dbConnector()
-    #connection.createDatabase()
+    connection.createDatabase()
     print(connection.getLastMatchID())
     connection.close_connection()
     print("Success")

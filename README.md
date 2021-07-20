@@ -8,5 +8,5 @@ The Program consists of a Webscraper which pulls Data off several sites. These i
   
 Additionally theres a Portion of the Program based around analysing the scraped Data.
 The Games get processed using a Elo-Algorithm to rate the Players. These Ratings are then
-used to predict future Winners. Current predictions can be seen at www.jakobendler.eu/csgo
+used to predict future Winners.
 

@@ -7,14 +7,14 @@ import time
 import json
 import proxyManager as pM
 import sys
-import cfscrape
+import cloudscraper
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
 it scrapes the relevant Data and hands it over to the Database Manager
 Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
-_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36'''
+_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36'''
 
 # proxy.txt needs to contain NordVPN Proxy Username and Password
 # try:
@@ -45,22 +45,12 @@ def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=30):
         # User Agent Mozilla to Circumvent Security Blocking
         request = "GET / HTTP/1.1\r\n"
 
-        cookie_value, user_agent = cfscrape.get_cookie_string(url)
-        print(cookie_value)
         headers = {'user-agent': useragent}
 
-        if use_proxy:
-            page_html = proxies.proxiedRequest(url)
+        cs = cloudscraper.create_scraper()
 
-            while 'DDoS protection' in str(page_html):
-                # if Cloudflare blocks the Proxy, try another one
-                print("Another one")
-                page_html = proxies.proxiedRequest(url)
-        else:
-            page_html = get(url).text
-            if 'DDoS protection' in str(page_html):
-                cookie_value, user_agent = cfscrape.get_cookie_string(url)
-                print(cookie_value)
+        page_html = cs.get(url).text
+        
     except Exception as e:
         print(e)
         print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
@@ -94,11 +84,9 @@ def findMatchLinks(page_soup):
 
 
 def findLinkToNextPage(page_soup):
-    print(page_soup)
-    if 'DDoS protection' in str(page_html):
+    if 'DDoS protection' in str(page_soup):
         print("Yeet")
     nextPage = page_soup.find("a", {"class": "pagination-next"})
-    print(nextPage)
     return "https://www.hltv.org" + nextPage["href"]
 
 
@@ -452,7 +440,7 @@ def findNewMatches():
         nextpage = findLinkToNextPage(page_soup)
         print("Analysing Match No:" + str(len(res)))
         page_soup = getRawData(nextpage)
-        return res
+    return res
 
 
 def updateData():

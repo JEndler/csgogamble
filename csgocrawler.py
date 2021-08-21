@@ -1,4 +1,4 @@
-from requests import request
+from requests import request, get
 from bs4 import BeautifulSoup as soup
 import pandas as pd
 import datetime
@@ -6,14 +6,15 @@ import dbConnector
 import time
 import json
 import proxyManager as pM
+import sys
+import cfscrape
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
 it scrapes the relevant Data and hands it over to the Database Manager
 Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
-_UAGENT = '''Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KOT49H)
-  AppleWebKit/537.36 (KHTML, like Gecko) Version/1.6 Chrome/28.0.1500.94 Mobile Safari/537.36'''
+_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36'''
 
 # proxy.txt needs to contain NordVPN Proxy Username and Password
 # try:
@@ -24,21 +25,42 @@ _UAGENT = '''Mozilla/5.0 (Linux; Android 4.4.2; en-us; SAMSUNG SM-G386T Build/KO
 # except Exception:
 #     PROXY_USR, PROXY_PW = None, None
 proxies = pM.ProxyManager(validateProxies=False)
+use_proxy = False
 
 
-def getRawData(url, useragent=_UAGENT, waittime=16):
+def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=30):
     """
     returns a bs4.soup-Object of the given url
 
-    @Params: url: a string-url for a HLTV-Match page
+    @Params: 
+        url: a string-url for a HLTV-Match page
+        waittime: default waittime after encountering a HTTP429 Error
+        proxy: Bool to use proxy or not
+        crawl_delay: default delay after each request
     @returns a bs4.soup-Object
     """
     try:
         # Connect and Save the HTML Page
         # Check if Proxy Settings are available
         # User Agent Mozilla to Circumvent Security Blocking
-        page_html = proxies.proxiedRequest(url)
+        request = "GET / HTTP/1.1\r\n"
 
+        cookie_value, user_agent = cfscrape.get_cookie_string(url)
+        print(cookie_value)
+        headers = {'user-agent': useragent}
+
+        if use_proxy:
+            page_html = proxies.proxiedRequest(url)
+
+            while 'DDoS protection' in str(page_html):
+                # if Cloudflare blocks the Proxy, try another one
+                print("Another one")
+                page_html = proxies.proxiedRequest(url)
+        else:
+            page_html = get(url).text
+            if 'DDoS protection' in str(page_html):
+                cookie_value, user_agent = cfscrape.get_cookie_string(url)
+                print(cookie_value)
     except Exception as e:
         print(e)
         print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
@@ -47,6 +69,7 @@ def getRawData(url, useragent=_UAGENT, waittime=16):
 
     # Parse HTML
     page_soup = soup(page_html, "html.parser")
+    time.sleep(crawl_delay)
     return page_soup
 
 
@@ -71,7 +94,11 @@ def findMatchLinks(page_soup):
 
 
 def findLinkToNextPage(page_soup):
+    print(page_soup)
+    if 'DDoS protection' in str(page_html):
+        print("Yeet")
     nextPage = page_soup.find("a", {"class": "pagination-next"})
+    print(nextPage)
     return "https://www.hltv.org" + nextPage["href"]
 
 
@@ -414,6 +441,7 @@ def findNewMatches():
     print("Last Scraped Match found with ID: " + str(lastID))
     HLTVLINK = "https://www.hltv.org/results"
     page_soup = getRawData(HLTVLINK)
+    assert page_soup is not None, "Page HTML didnt load, aborting..."
     res = []
     while True:
         for matchlink in findMatchLinks(page_soup):
@@ -436,17 +464,18 @@ def updateData():
     linklist = linklist[::-1]
     counter = 0
     print("Discovering Matches done, starting the Download...")
+    print("Found " + str(len(linklist)) + " Matches to download, estimated Time to finish: " + str(0.5 * len(linklist)) + "min")
     for link in linklist:
         print("Scraping Match No:" + str(counter) + " | Link: " + link)
         try:
             scrapeDataForMatch(link)
         except Exception as e:
-            print(e)
+            raise e
         counter += 1
 
 
 def main():
-    proxies.proxy_list = proxies._checkSavedProxies()
+    if use_proxy: proxies.proxy_list = proxies._checkSavedProxies()
     starttime = datetime.datetime.now()
     updateData()
     timedelta = datetime.datetime.now() - starttime
@@ -454,4 +483,5 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--use-proxy": use_proxy = True 
     main()

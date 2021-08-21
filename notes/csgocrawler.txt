@@ -15,3 +15,7 @@ Games als eigene Tabelle auslagern?
 Bugs:
 	IndividualRoundWins sind buggy bei Ties
 		Not Fixable weil HLTV nur bis 15-15 die Round Wins anzeigt
+
+
+TODO:
+	Solution to wait when the Scraper runs into Cloudflare-DDOS-Protection

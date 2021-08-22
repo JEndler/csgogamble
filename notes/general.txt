@@ -13,3 +13,11 @@ Restrcuturing of the Project:
 TODO:
 	eine _writeScrapedDataToDB()-methode in dbConnector
 	eine scrapeAllDataForGame()-methode in csgocrawler
+
+- OddsScraper mit VPN automatisieren, maybe auf Raspi?
+
+- Elo und TrueSkill durchrechnen
+
+- Random Forest implementieren
+
+- Paperbetting durchrechnen

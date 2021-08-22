@@ -28,7 +28,7 @@ proxies = pM.ProxyManager(validateProxies=False)
 use_proxy = False
 
 
-def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=30):
+def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
     """
     returns a bs4.soup-Object of the given url
 
@@ -458,7 +458,9 @@ def updateData():
         try:
             scrapeDataForMatch(link)
         except Exception as e:
-            raise e
+            print("Encountered Error while scraping match with url:")
+            print(link)
+            print(e)
         counter += 1
 
 
@@ -471,5 +473,10 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--use-proxy": use_proxy = True 
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--use-proxy": use_proxy = True
+    if len(sys.argv) > 1 and sys.argv[1] == "--testing":
+        url = "https://www.hltv.org/matches/2348882/clutch-rayn-vs-akuma-numberone-season-2-cup-2"
+        scrapeDataForMatch(url)
+        print("Success")
+    else:    
+        main()

@@ -8,11 +8,17 @@ import sqlite3
 import datetime
 
 
+# TODO: Connect to real Log-File
+def errorlog(errorstring):
+    print(errorstring)
+
 class dbConnector():
     DB_FILEPATH = "data/csgodata.db"
 
     def __init__(self):
         self.conn = sqlite3.connect(self.DB_FILEPATH)
+
+
 
     def createDatabase(self):
         c = self.conn.cursor()
@@ -103,9 +109,9 @@ class dbConnector():
                 (map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID, team1IDs, team2IDs)
                 VALUES (?,?,?,?,?,?,?,?,?)
             """, tpl)
-        except Exception:
-            pass
-            # errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
+        except Exception as e:
+            errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
+            print(e)
         finally:
             c.close()
             self.conn.commit()
@@ -211,9 +217,6 @@ class dbConnector():
         c.close()
         return data
 
-    # TODO: Connect to real Log-File
-    def errorlog(errorstring):
-        pass
 
 
 def main():

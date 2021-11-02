@@ -27,7 +27,7 @@ class TrueskillHandler():
 
     def __init__(self, DB_FILEPATH="data/trueskill.db", CONFIG_PATH="data/trueskill.conf", debug=True):
         assert os.path.exists(CONFIG_PATH), "No Config File found"
-        assert os.path.exists(DB_FILEPATH), "No Database File found"
+        #assert os.path.exists(DB_FILEPATH), "No Database File found"
         self.DB_FILEPATH = DB_FILEPATH
         self.CONFIG_PATH = CONFIG_PATH
         self.lastCalculatedGame = self._load_config()
@@ -37,6 +37,10 @@ class TrueskillHandler():
     def _load_config(self):
         with open(self.CONFIG_PATH, "r") as configfile:
             return int(configfile.readline().split("=")[1].strip())
+
+    def _write_to_config(self, gameID):
+        with open(self.CONFIG_PATH, "w") as configfile:
+            configfile.write(str("lastCalculatedGame=" + str(gameID)))
 
     def createDatabase(self):
         c = self.conn.cursor()
@@ -97,6 +101,7 @@ class TrueskillHandler():
         self.conn.commit()
 
     # Teams are Lists of Rating-Objects
+    # returns Winprobability for team2
     def win_probability(self, team1, team2):
         delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)
         sum_sigma = sum(r.sigma ** 2 for r in itertools.chain(team1, team2))
@@ -155,10 +160,11 @@ class TrueskillHandler():
     def _calculateMatches(self, gameIDs):
         for game in gameIDs:
             if game <= self.lastCalculatedGame:
-                continue
+                raise ValueError("_calculateMatches: Invalid GameID")
             try:
                 data = self.loadData(game)
                 self._calculateSingleMatch(data)
+                self._write_to_config(game)
             except Exception as e:
                 self._debug("Failed to calculate Match " + str(game) + " with Error:")
                 self._debug(e)
@@ -167,7 +173,7 @@ class TrueskillHandler():
         testdata = self.loadData(gameID)
         team1_id, team2_id = testdata["team1"], testdata["team2"]
         team1win = self.win_probability(self._loadTeamRating(testdata[team1_id]), self._loadTeamRating(testdata[team2_id]))
-        self._debug("Probability for Team 1 to win: " + str(team1win))
+        self._debug("Probability for Team 2 to win: " + str(team1win))
         return team1win
 
     def _debug(self, s):
@@ -177,13 +183,28 @@ class TrueskillHandler():
 class predictionHandler():
     def __init__(self, debug=True):
         self.TH = TrueskillHandler()
+        self.DB = dbConnector.dbConnector()
         self.debug = debug
+
+    def calcTrueskill(self):
+        try:
+            trainingGames = self.DB.loadNextGames(self.TH.lastCalculatedGame)
+        except Exception as e:
+            self._debug("No more Games to calc TrueSkill on.")
+            return
+        self._debug("Found " + str(len(trainingGames)) + " Games to calculate Rating.")
+        self.TH._calculateMatches(trainingGames)
+        self._debug("Finished Calculating Ratings on " + str(len(trainingGames)) + " Games.")
 
     def predict(self, team1, team2):
         # Teams are lists of PlayerIDs
         TH_prediction = self.TH.win_probability(self.TH._loadTeamRating(team1), self.TH._loadTeamRating(team2))
         TH_prediction = (round(TH_prediction, 2), round((1 - TH_prediction), 2))
+        print(TH_prediction)
         return TH_prediction
+
+    def extractFeatures(self, gameID):
+        pass
 
     def _debug(self, s):
         if self.debug: print("predictionHandler: " + str(s))
@@ -191,20 +212,20 @@ class predictionHandler():
 
 def main():
     TH = TrueskillHandler(debug=True)
-    TH.createDatabase()
-    odds = loadOdds()
-    firstDayWithOdds = sorted([(x['scrapedAt']) for x in odds])[0].split(" ")[0]
-    print(firstDayWithOdds)
-    connection = dbConnector.dbConnector()
-    data = connection.loadGamesUntilDay(firstDayWithOdds)
-    connection.close_connection()
-    print("Calculating Rating based on " + str(int(len(data))) + " Games...")
+
+    predictions = predictionHandler()
     start = time.time()
-    TH._calculateMatches(data)
+    
+    predictions.calcTrueskill()
+
     print("Calculating Matches took " + str(time.time() + start) + " Seconds.")
-    testdata = TH.loadData(60115)
+
+    testdata = TH.loadData(1)
     team1_id, team2_id = testdata["team1"], testdata["team2"]
-    print(TH.win_probability(TH._loadTeamRating(testdata[team1_id]), TH._loadTeamRating(testdata[team2_id])))
+    print(team1_id)
+    print(TH._loadTeamRating(testdata[team1_id]))
+    print(TH._loadTeamRating(testdata[team2_id]))
+    print(predictions.predict(testdata[team1_id], testdata[team2_id]))
     # TH._calculateSingleMatch(TH.loadData(2777))
 
 

@@ -63,22 +63,42 @@ class csgogamble():
         odds = next((item[provider] for item in self.odds if item["gameID"] == str(matchID)), None)
         return (float(odds[0]), float(odds[1]))
 
-    def _loadData(self, gameID):
+    def getWinner(self, gameID):
+        self.db.getWinner(gameID)
+
+    def _loadSingleGamePrediction(self, gameID):
         predictedOdds = self.predictGameByGameID(gameID)
         actualOdds = self.getOdds(gameID)
-        pass
+        winner = self.getWinner(gameID)
+        result = {"Winner": winner, "PredictedWinner": predictedOdds.index(max(predictedOdds)), "BookieWinner": actualOdds.index(max(actualOdds))}
+        return result
+
+    def simulate(self):
+        for game in self.odds:
+            try:
+                _loadSingleGamePrediction(game["gameID"])
+            except:
+                pass
 
     def _debug(self, s):
-        if self.debug: print("csgogamle: " + str(s))
+        if self.debug: print("csgogamble: " + str(s))
+
 
 
 def main():
     cs = csgogamble()
-    print(cs.predictGameByGameID(96474))
-    print(cs.getOdds(96474))
-    print(cs.Kelly(cs.predictGameByGameID(96474)[0], cs.getOdds(96474)[0]))
-    print(cs.Kelly(cs.predictGameByGameID(96474)[1], cs.getOdds(96474)[1]))
+    games = set()
+    print(len(set(game["gameID"] for game in cs.odds)))
 
+    print(sorted(list(set(game["gameID"] for game in cs.odds))))    
+
+    testgame = "2331668"
+
+
+
+
+    # print(cs.Kelly(cs.predictGameByGameID(96474)[0], cs.getOdds(96474)[0]))
+    # print(cs.Kelly(cs.predictGameByGameID(96474)[1], cs.getOdds(96474)[1]))
 
 if __name__ == "__main__":
     main()

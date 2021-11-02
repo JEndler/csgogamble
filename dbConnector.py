@@ -18,8 +18,6 @@ class dbConnector():
     def __init__(self):
         self.conn = sqlite3.connect(self.DB_FILEPATH)
 
-
-
     def createDatabase(self):
         c = self.conn.cursor()
         command = """
@@ -182,6 +180,21 @@ class dbConnector():
         c = self.conn.cursor()
         c.execute("SELECT MATCHID FROM GAMES WHERE HLTVID = ?", (gameID,))
         return c.fetchone()[0]
+
+    def getWinner(self, gameID):
+        c = self.conn.cursor()
+        c.execute("SELECT scoreTeam1, scoreTeam2 FROM GAMES WHERE HLTVID = ?", (gameID,))
+        if scoreTeam1 > scoreTeam2:
+            return 1
+        elif scoreTeam2 > scoreTeam1:
+            return 2
+        else:
+            return 0
+
+    def loadNextGames(self, gameID):
+        c = self.conn.cursor()
+        c.execute("SELECT ID FROM GAMES WHERE ID > ?", (gameID,))
+        return [x[0] for x in c.fetchall()]
 
     def _getPredictiondata(self, gameID):
         c = self.conn.cursor()

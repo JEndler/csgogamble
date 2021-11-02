@@ -6,27 +6,7 @@ from bs4 import BeautifulSoup as soup
 from datetime import datetime
 import json
 import time
-
-def getRawData(url, waittime=16):
-
-    # User Agent Mozilla to Circumvent Security Blocking
-    req = Request(url, headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:47.0) Gecko/20100101 Firefox/47.0'})
-
-    # Connect and Save the HTML Page
-    try:
-        uClient = urlopen(req)
-        page_html = uClient.read()
-        uClient.close()
-    except Exception:
-        print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
-        time.sleep(waittime)
-        return getRawData(url, waittime=waittime * 2)
-
-
-    # Parse HTML
-    page_soup = soup(page_html, "html.parser")
-    return page_soup
-
+from csgocrawler import getRawData
 
 def findMatchLinks(page_soup, date=None):
     match_link_list = []

@@ -196,6 +196,15 @@ class predictionHandler():
         self.TH._calculateMatches(trainingGames)
         self._debug("Finished Calculating Ratings on " + str(len(trainingGames)) + " Games.")
 
+    def load_untrained_games(self):
+        try:
+            testingGames = self.DB.loadNextGames(self.TH.lastCalculatedGame)
+        except Exception as e:
+            self._debug("No Games to Test Trueskill.")
+            return
+        for game in testingGames:
+            print(game)
+
     def predict(self, team1, team2):
         # Teams are lists of PlayerIDs
         TH_prediction = self.TH.win_probability(self.TH._loadTeamRating(team1), self.TH._loadTeamRating(team2))
@@ -216,7 +225,8 @@ def main():
     predictions = predictionHandler()
     start = time.time()
     
-    predictions.calcTrueskill()
+    #predictions.calcTrueskill()
+    predictions.load_untrained_games()
 
     print("Calculating Matches took " + str(time.time() + start) + " Seconds.")
 

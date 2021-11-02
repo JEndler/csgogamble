@@ -63,6 +63,7 @@ def analyseUpcomingMatch(url):
                 assert str(odds[1]).replace(".", "").isdigit()
                 res[str(_BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)])] = (odds[0], odds[1])
             except AssertionError:
+                pass
                 #print("No Odds Data for Provider: " + providerName + " with GameID: " + str(gameID))
         writeOddsToFile(res)
         print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
@@ -108,7 +109,6 @@ def main():
     _HLTV_MATCHES = "https://www.hltv.org/matches"
     for link in findMatchLinks(getRawData(_HLTV_MATCHES)):
         analyseUpcomingMatch(link)
-
 
 if __name__ == "__main__":
     main()

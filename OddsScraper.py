@@ -13,7 +13,6 @@ def findMatchLinks(page_soup, date=None):
     matchday = page_soup.find("div", {"class": "upcoming-matches"})
     matchday = page_soup.find("div", {"class": "upcomingMatchesContainer"})
     for link in matchday.findAll("a", {"href": True}):
-        print("found match")
         if "/matches/" in str(link["href"]):
             match_link_list.append("https://www.hltv.org" + str(link['href']))
     return match_link_list
@@ -34,7 +33,6 @@ def analyseUpcomingMatch(url):
                           " gprov_3etkx6rj provider"]
     _BETTING_PROVIDER_NAMES = ["gg.bet", "betway", "loot.bet", "egb", "thunderpick", "bet365"]
     page_soup = getRawData(url)
-    print(url)
     time = page_soup.find("div", {"class": "time"})
     currentTime = str(datetime.now())
     currentHour = currentTime.split(" ")[1]
@@ -50,7 +48,6 @@ def analyseUpcomingMatch(url):
     res["gameID"] = gameID
     res["scrapedAt"] = str(datetime.now())
     if timeTillGame < 40:
-        # print("Temp")
         for provider in _BETTING_PROVIDERS:
             row = page_soup.find("tr", {"class": provider})
             if row is None:
@@ -60,21 +57,19 @@ def analyseUpcomingMatch(url):
             #    tmpfile.write(page_soup.prettify())
             odds = (row.text.strip().replace("\n", "").split("-"))
             providerName = _BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)]
-            # print(providerName)
             try:
                 assert len(odds) == 2
                 assert str(odds[0]).replace(".", "").isdigit()
                 assert str(odds[1]).replace(".", "").isdigit()
                 res[str(_BETTING_PROVIDER_NAMES[_BETTING_PROVIDERS.index(provider)])] = (odds[0], odds[1])
             except AssertionError:
-                print("No Odds Data for Provider: " + providerName + " with GameID: " + str(gameID))
+                #print("No Odds Data for Provider: " + providerName + " with GameID: " + str(gameID))
         writeOddsToFile(res)
         print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
 
 
 def writeOddsToFile(resdict):
     with open("/home/projects/csgogamble/data/odds.txt", "a", encoding='utf-8') as oddsfile:
-        # print(json.dumps(resdict))
         oddsfile.write("\n" + str(json.dumps(resdict)))
     cleanupOddsfile()
 

@@ -18,6 +18,7 @@ import dbConnector
 import ast
 import time
 from OddsScraper import loadOdds
+from matplotlib import pyplot as plt
 
 
 class TrueskillHandler():
@@ -27,11 +28,14 @@ class TrueskillHandler():
 
     def __init__(self, DB_FILEPATH="data/trueskill.db", CONFIG_PATH="data/trueskill.conf", debug=True):
         assert os.path.exists(CONFIG_PATH), "No Config File found"
-        #assert os.path.exists(DB_FILEPATH), "No Database File found"
         self.DB_FILEPATH = DB_FILEPATH
         self.CONFIG_PATH = CONFIG_PATH
         self.lastCalculatedGame = self._load_config()
         self.conn = sqlite3.connect(self.DB_FILEPATH)
+        try:
+            self.createDatabase()
+        except Exception as e:
+            pass
         self.debug = debug
 
     def _load_config(self):
@@ -101,7 +105,7 @@ class TrueskillHandler():
         self.conn.commit()
 
     # Teams are Lists of Rating-Objects
-    # returns Winprobability for team2
+    # returns Winprobability for team1
     def win_probability(self, team1, team2):
         delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)
         sum_sigma = sum(r.sigma ** 2 for r in itertools.chain(team1, team2))
@@ -173,7 +177,7 @@ class TrueskillHandler():
         testdata = self.loadData(gameID)
         team1_id, team2_id = testdata["team1"], testdata["team2"]
         team1win = self.win_probability(self._loadTeamRating(testdata[team1_id]), self._loadTeamRating(testdata[team2_id]))
-        self._debug("Probability for Team 2 to win: " + str(team1win))
+        self._debug("Probability for Team 1 to win: " + str(team1win))
         return team1win
 
     def _debug(self, s):
@@ -202,17 +206,66 @@ class predictionHandler():
         except Exception as e:
             self._debug("No Games to Test Trueskill.")
             return
-        for game in testingGames:
-            print(game)
+        print(len(testingGames))
+        return testingGames
+
+    def test_trueskill(self, testing_games):
+        total_games = len(testing_games)
+        correct_predictions = 0
+        accuracy = []
+        for index, game in enumerate(testing_games):
+            game = self.TH.loadData(game)
+            predictedOdds = self.predict(game[game["team1"]], game[game["team2"]])
+            if game["scoreTeam1"] > game["scoreTeam2"]:
+                actualWinner = 1
+            elif game["scoreTeam2"] > game["scoreTeam1"]:
+                actualWinner = 2
+            else:
+                continue
+
+            print("Score: " + str(game["scoreTeam1"]) + " : " + str(game["scoreTeam2"]))
+            print("Prediction: " + str(predictedOdds))
+            if predictedOdds == (0.5, 0.5):
+                # if both teams have just been initialized, there is no need to count the prediction
+                self.TH._calculateMatches([game["gameID"]])
+                continue
+            if predictedOdds.index(max(predictedOdds)) + 1 == actualWinner:
+                correct_predictions += 1
+            if index != 0: 
+                currentWinrate = correct_predictions / (index + 1)
+                print("Current Winrate: " + str(currentWinrate))
+                accuracy.append(currentWinrate)
+            self.TH._calculateMatches([game["gameID"]])
+            if index == 5000: break
+        with open('data/accuracy.pkl', 'wb') as f:
+            pickle.dump(accuracy, f)
+        plt.style.use('fivethirtyeight')
+        plt.plot(accuracy)
+        plt.ylabel("accuracy")
+        plt.show()
+
 
     def predict(self, team1, team2):
         # Teams are lists of PlayerIDs
         TH_prediction = self.TH.win_probability(self.TH._loadTeamRating(team1), self.TH._loadTeamRating(team2))
         TH_prediction = (round(TH_prediction, 2), round((1 - TH_prediction), 2))
-        print(TH_prediction)
         return TH_prediction
 
     def extractFeatures(self, gameID):
+        """Returns a Dictionary containing all the Features for the given gameID.
+        
+        Features include:
+            - Trueskill Rating of all 10 Players
+            - winrate of Players in last X months
+            - games played in Last X Months
+            - hs_ratio in Last X Months
+            - adr in Last X Months
+            - winrate on map in last X Games
+            - time since last roster change
+
+        Args:
+            gameID (Integer): ID present in the SQLite-Database
+        """
         pass
 
     def _debug(self, s):
@@ -226,18 +279,37 @@ def main():
     start = time.time()
     
     #predictions.calcTrueskill()
-    predictions.load_untrained_games()
+    predictions.test_trueskill(predictions.load_untrained_games())
 
     print("Calculating Matches took " + str(time.time() + start) + " Seconds.")
 
-    testdata = TH.loadData(1)
+
+def test():
+    TH = TrueskillHandler(debug=True)
+
+    predictions = predictionHandler()
+
+    a = [trueskill.Rating(mu=24.0,sigma=1.0)]
+    b = [trueskill.Rating(mu=25.0,sigma=1.0)]
+
+    print(TH.win_probability(a, b))
+
+    TH_prediction = TH.win_probability(a, b)
+
+    TH_prediction = (round(TH_prediction, 2), round((1 - TH_prediction), 2))
+    
+    print(TH_prediction)
+
+    time.sleep(10)
+
+    testdata = TH.loadData(13650)
+    print(testdata)
     team1_id, team2_id = testdata["team1"], testdata["team2"]
     print(team1_id)
     print(TH._loadTeamRating(testdata[team1_id]))
     print(TH._loadTeamRating(testdata[team2_id]))
     print(predictions.predict(testdata[team1_id], testdata[team2_id]))
     # TH._calculateSingleMatch(TH.loadData(2777))
-
 
 if __name__ == "__main__":
     main()

@@ -7,10 +7,9 @@ by the Elo-Algorithm and the DNNClassifier
 import sqlite3
 import datetime
 
-
 # TODO: Connect to real Log-File
 def errorlog(errorstring):
-    print(errorstring)
+    print(errorstring) 
 
 class dbConnector():
     DB_FILEPATH = "data/csgodata.db"
@@ -72,6 +71,18 @@ class dbConnector():
             FOREIGN KEY (playerID) REFERENCES Players(ID),
             FOREIGN KEY (gameID) REFERENCES Games(ID)
         );
+        
+        CREATE TABLE IF NOT EXISTS Odds (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            HLTVID INTEGER,
+            game_link TEXT UNIQUE,
+            provider_link TEXT,
+            odds_team1 REAL,
+            odds_team2 REAL,
+            scraped_at TEXT,
+            PRIMARY KEY (ID)
+        );
+        
         """
         c.executescript(command)
         c.close()
@@ -96,6 +107,17 @@ class dbConnector():
         finally:
             c.close()
             self.conn.commit()
+            
+    def updateOddsTable(self, HLTVID: int, game_link: str, provider_link: str, odds_team1: float, odds_team2: float, scraped_at: str = str(datetime.datetime.now())):
+        c = self.conn.cursor()
+        tpl = (HLTVID, game_link, provider_link, odds_team1, odds_team2, scraped_at)
+        c.execute("""
+            INSERT INTO Odds
+            (HLTVID, game_link, provider_link, odds_team1, odds_team2, scraped_at)
+            VALUES (?,?,?,?,?,?)
+        """, tpl)
+        c.close()
+        self.conn.commit()
 
     def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", team1IDs: str = "", team2IDs: str = ""):
         c = self.conn.cursor()
@@ -229,6 +251,15 @@ class dbConnector():
         data["link"] = teams[2]
         c.close()
         return data
+
+    def getFeatures(self, gameID):
+        """Returns Features for the GameID
+
+        Args:
+            gameID (Integer): ID present in the SQLite-Database.
+        """
+        pass
+
 
 
 

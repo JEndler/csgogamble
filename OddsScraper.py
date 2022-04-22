@@ -6,9 +6,11 @@ from bs4 import BeautifulSoup as soup
 from datetime import datetime
 import json
 import time
-from dbConnector import dbConnector, updateOddsTable
+from dbConnector import dbConnector
 from numpy import logspace
 from csgocrawler import getRawData
+
+#TODO add logging.
 
 def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
     match_link_list = []
@@ -23,10 +25,21 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
 
 
 def analyseUpcomingMatch(url, scraping_window=5, save_to_file=True, path="data/upcoming_matches"):
+    """_summary_
+
+    Args:
+        url (_type_): _description_
+        scraping_window (int, optional): _description_. Defaults to 5.
+        save_to_file (bool, optional): _description_. Defaults to True.
+        path (str, optional): _description_. Defaults to "data/upcoming_matches".
+
+    Returns:
+        Boolean: returns True if the match was scraped successfully, meaning the match had less then 5 minutes till starting.
+    """
     page_soup = getRawData(url)
 
     # if there is more than an hour left for the game to start, we don't want to scrape it
-    if 'h' in page_soup.find("div", {"class": "countdown"}).text: return
+    if 'h' in page_soup.find("div", {"class": "countdown"}).text: return False
     
     # gets the minutes till the game starts, from the countdown element on the match page.
     minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
@@ -51,7 +64,7 @@ def analyseUpcomingMatch(url, scraping_window=5, save_to_file=True, path="data/u
 
         saveOddsToDB(res, gameID, url)
         print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
-        return res
+        return True
 
 
 def saveOddsToDB(odds, gameID, url):
@@ -63,7 +76,10 @@ def saveOddsToDB(odds, gameID, url):
 def main():
     _HLTV_MATCHES = "https://www.hltv.org/matches"
     for link in findMatchLinks(getRawData(_HLTV_MATCHES)):
-        analyseUpcomingMatch(link)
+        if analyseUpcomingMatch(link) == False:
+            print("Match will start in more than 5 minutes | GameID: " + str(link.split("/")[4]))
+            print("Aborting scraping... restarting in 5 minutes")
+            break
 
 if __name__ == "__main__":
     main()

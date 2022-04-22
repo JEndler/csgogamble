@@ -79,8 +79,7 @@ class dbConnector():
             provider_link TEXT,
             odds_team1 REAL,
             odds_team2 REAL,
-            scraped_at TEXT,
-            PRIMARY KEY (ID)
+            scraped_at TEXT
         );
         
         """

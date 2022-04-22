@@ -110,11 +110,14 @@ class dbConnector():
     def updateOddsTable(self, HLTVID: int, game_link: str, provider_link: str, odds_team1: float, odds_team2: float, scraped_at: str = str(datetime.datetime.now())):
         c = self.conn.cursor()
         tpl = (HLTVID, game_link, provider_link, odds_team1, odds_team2, scraped_at)
-        c.execute("""
-            INSERT INTO Odds
-            (HLTVID, game_link, provider_link, odds_team1, odds_team2, scraped_at)
-            VALUES (?,?,?,?,?,?)
-        """, tpl)
+        try:
+            c.execute("""
+                INSERT INTO Odds
+                (HLTVID, game_link, provider_link, odds_team1, odds_team2, scraped_at)
+                VALUES (?,?,?,?,?,?)
+            """, tpl)
+        except Exception:
+            errorlog("ERROR: Odds for Game with ID: " + str(HLTVID) + " could not be added.")
         c.close()
         self.conn.commit()
 

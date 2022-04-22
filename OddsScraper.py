@@ -24,7 +24,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url, scraping_window=5, save_to_file=True, path="data/upcoming_matches"):
+def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/upcoming_matches"):
     """_summary_
 
     Args:

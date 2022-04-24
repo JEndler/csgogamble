@@ -75,7 +75,7 @@ class dbConnector():
         CREATE TABLE IF NOT EXISTS Odds (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             HLTVID INTEGER,
-            game_link TEXT UNIQUE,
+            game_link TEXT,
             provider_link TEXT,
             odds_team1 REAL,
             odds_team2 REAL,

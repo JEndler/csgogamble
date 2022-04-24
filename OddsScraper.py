@@ -24,7 +24,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/upcoming_matches"):
+def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/upcoming_matches/"):
     """_summary_
 
     Args:
@@ -48,17 +48,19 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
     res = {}
 
     # save the scraped html to file
-    if save_to_file and minutes_till_game < scraping_window:
+    if save_to_file or minutes_till_game < scraping_window:
         with open(str(gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
-            file.write(page_soup.html)
+            file.write(path + str(page_soup.html))
 
     # if the game will start in the next 5 minutes, scrape the betting odds
     if minutes_till_game < scraping_window:
         for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
             try:
+                print(provider.text)
                 odds = [provider.find_all("td")[1].text, provider.find_all("td")[3].text]
                 href = provider.find("a", {"href": True})["href"]
                 res[href] = odds
+                print(res)
             except Exception as e:
                 print(e)
 
@@ -68,9 +70,9 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
 
 
 def saveOddsToDB(odds, gameID, url):
-    dbConnector = dbConnector()
+    db = dbConnector()
     for key in odds.keys():
-        dbConnector.updateOddsTable(gameID, url, key, odds[key][0], odds[key][1])
+        db.updateOddsTable(gameID, url, key, odds[key][0], odds[key][1])
 
 
 def main():
@@ -82,4 +84,5 @@ def main():
             break
 
 if __name__ == "__main__":
-    main()
+    print("Starting scraping at: " + str(datetime.now()))
+    analyseUpcomingMatch("https://www.hltv.org/matches/2355926/tricked-vs-onyx-pinnacle-cup-iv")

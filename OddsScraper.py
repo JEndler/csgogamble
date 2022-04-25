@@ -48,7 +48,7 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
     res = {}
 
     # save the scraped html to file
-    if save_to_file or minutes_till_game < scraping_window:
+    if save_to_file and minutes_till_game < scraping_window:
         with open(str(gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
             file.write(path + str(page_soup.html))
 
@@ -56,11 +56,9 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
     if minutes_till_game < scraping_window:
         for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
             try:
-                print(provider.text)
                 odds = [provider.find_all("td")[1].text, provider.find_all("td")[3].text]
                 href = provider.find("a", {"href": True})["href"]
                 res[href] = odds
-                print(res)
             except Exception as e:
                 print(e)
 
@@ -85,4 +83,4 @@ def main():
 
 if __name__ == "__main__":
     print("Starting scraping at: " + str(datetime.now()))
-    analyseUpcomingMatch("https://www.hltv.org/matches/2355926/tricked-vs-onyx-pinnacle-cup-iv")
+    main()

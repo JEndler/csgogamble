@@ -135,7 +135,7 @@ def _getMatchDate(page_soup):
     @returns a datetime.datetime Object
     """
     time = page_soup.find("div", {"class": "time"}).text
-    date = page_soup.find("div", {"class": "date"}).text
+    date = page_soup.find("div", {"class": "date", "data-time-format":"do 'of' MMMM y"}).text
     year = date[-4:]
     day = int((date.split(" ")[0])[0:-2])
     month = month_string_to_number(date.split(" ")[2])

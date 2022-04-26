@@ -49,8 +49,8 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
 
     # save the scraped html to file
     if save_to_file and minutes_till_game < scraping_window:
-        with open(str(gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
-            file.write(path + str(page_soup.html))
+        with open(str(path + gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
+            file.write(str(page_soup.html))
 
     # if the game will start in the next 5 minutes, scrape the betting odds
     if minutes_till_game < scraping_window:

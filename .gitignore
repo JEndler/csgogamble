@@ -1,7 +1,7 @@
 *.txt
 *.db
 *.csv
-data/
-/data
 data/*
+/data
+/data/*
 *.pyc

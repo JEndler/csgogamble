@@ -26,7 +26,10 @@ _UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
 #     PROXY_USR, PROXY_PW = None, None
 proxies = pM.ProxyManager(validateProxies=False)
 use_proxy = False
-
+proxies = {
+    "http": "http://JEndler:jjYHprBA9@geo.iproyal.com:12323",
+    "https": "http://JEndler:jjYHprBA9@geo.iproyal.com:12323"
+}
 
 def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
     """
@@ -49,7 +52,7 @@ def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
 
         cs = cloudscraper.create_scraper()
 
-        page_html = cs.get(url).text
+        page_html = cs.get(url, proxies=proxies).text
         
     except Exception as e:
         print(e)

@@ -24,7 +24,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/upcoming_matches/"):
+def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/upcoming_games/"):
     """_summary_
 
     Args:
@@ -40,10 +40,10 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
 
     # if there is more than an hour left for the game to start, we don't want to scrape it
     if 'h' in page_soup.find("div", {"class": "countdown"}).text: return False
-    
+
     # gets the minutes till the game starts, from the countdown element on the match page.
     minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
-    
+
     gameID = str(url.split("/")[4])
     res = {}
 

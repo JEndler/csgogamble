@@ -7,12 +7,23 @@ from datetime import datetime
 import json
 import time
 from dbConnector import dbConnector
-from numpy import logspace
 from csgocrawler import getRawData
 
 #TODO add logging.
 
 def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
+    """finds all the match links for a given date. defaults to today.
+
+    Args:
+        page_soup (bs4.BeautifulSoup): bs4 object of the page to scrape.
+        date (datetime, optional): Date to scrape matches for. Defaults to datetime.today().strftime('%Y-%m-%d').
+
+    Returns:
+        match_link_list (list): list of url strings of the matches.
+
+    >>> findMatchLinks(getRawData("https://www.hltv.org/matches")) #doctest: +ELLIPSIS
+    ['https://www.hltv.org/matches...', ...]
+    """    
     match_link_list = []
     matches = page_soup.find("div", {"class": "upcomingMatchesContainer"})
     for matchday_section in matches.find_all("div", {"class": "upcomingMatchesSection"}):
@@ -24,18 +35,21 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/upcoming_games/"):
-    """_summary_
+def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="data/upcoming_matches/") -> bool:
+    """Scrapes Betting Odds for the given url. Returns True if successful, False if not. 
 
     Args:
-        url (_type_): _description_
-        scraping_window (int, optional): _description_. Defaults to 5.
+        url (string): _description_
+        scraping_window (int, optional): The amount of minutes a game needs to be from starting to be scraped. Defaults to 10.
         save_to_file (bool, optional): _description_. Defaults to True.
         path (str, optional): _description_. Defaults to "data/upcoming_matches".
 
     Returns:
         Boolean: returns True if the match was scraped successfully, meaning the match had less then 5 minutes till starting.
     """
+
+    assert "https://www.hltv.org/matches" in url, "URL is not a valid HLTV match link."
+
     page_soup = getRawData(url)
 
     # if there is more than an hour left for the game to start, we don't want to scrape it
@@ -67,7 +81,14 @@ def analyseUpcomingMatch(url, scraping_window=10, save_to_file=True, path="data/
         return True
 
 
-def saveOddsToDB(odds, gameID, url):
+def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
+    """takes a dictionary of odds and saves them to the database.
+
+    Args:
+        odds (dictionary): dictionary of odds to save, the key is the betting provider link.
+        gameID (string): string of the (numeric) gameID.
+        url (string): url of the match.
+    """
     db = dbConnector()
     for key in odds.keys():
         db.updateOddsTable(gameID, url, key, odds[key][0], odds[key][1])

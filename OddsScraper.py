@@ -56,7 +56,11 @@ def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="
     assert "https://www.hltv.org/matches" in url, "URL is not a valid HLTV match link."
 
     page_soup = getRawData(url)
-    logger.info("Got raw data for " + url)
+    if page_soup is None:
+        logger.error("Could not get page_soup for url: " + url)
+        return False
+    else:
+        logger.info("Got raw data for " + url)
 
     # if there is more than an hour left for the game to start, we don't want to scrape it
     if 'h' in page_soup.find("div", {"class": "countdown"}).text: 

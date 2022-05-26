@@ -14,7 +14,7 @@ This Class is responsible for handling the interaction with HLTV
 it scrapes the relevant Data and hands it over to the Database Manager
 Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
-_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36'''
+_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36'''
 
 # proxy.txt needs to contain NordVPN Proxy Username and Password
 # try:

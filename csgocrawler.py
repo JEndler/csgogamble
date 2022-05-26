@@ -8,6 +8,7 @@ import json
 import proxyManager as pM
 import sys
 import cloudscraper
+import logging
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
@@ -31,6 +32,11 @@ proxies = {
     "https": "http://JEndler:jjYHprBA9@geo.iproyal.com:12323"
 }
 
+fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
+# "basicConfig" is a convenience function, explained later
+logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
+logger = logging.getLogger(__name__)
+
 def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
     """
     returns a bs4.soup-Object of the given url
@@ -52,8 +58,12 @@ def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
 
         cs = cloudscraper.create_scraper()
 
-        page_html = cs.get(url, proxies=proxies).text
-        
+        page_html = cs.get(url, proxies=proxies, headers=headers).text
+
+        if page_html is None:
+            logger.error("Could not get page_html for url: " + url)
+            return None
+
     except Exception as e:
         print(e)
         print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")

@@ -10,7 +10,6 @@ from dbConnector import dbConnector
 from csgocrawler import getRawData
 import logging
 
-#TODO add logging.
 fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
 # "basicConfig" is a convenience function, explained later
 logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
@@ -68,7 +67,11 @@ def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="
         return False
 
     # gets the minutes till the game starts, from the countdown element on the match page.
-    minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
+    try:
+        minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
+    except ValueError:
+        logger.error("Game is already live. Returning True to move on to next Game.")
+        return True
 
     gameID = str(url.split("/")[4])
     res = {}
@@ -92,6 +95,8 @@ def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="
         saveOddsToDB(res, gameID, url)
         logger.info("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
         return True
+    logger.info("Game will start in " + str(minutes_till_game) + " minutes. Aborting scraping...")
+    return False
 
 
 def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
@@ -110,12 +115,9 @@ def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
 def main():
     _HLTV_MATCHES = "https://www.hltv.org/matches"
     for link in findMatchLinks(getRawData(_HLTV_MATCHES)):
-        if analyseUpcomingMatch(link) == False:
-            logger.info("Match will start in more than 5 minutes | GameID: " + str(link.split("/")[4]))
-            logger.info("Aborting scraping... restarting in 5 minutes")
-            break
-        else:
-            logger.info("Link: " + link + " didn't work. moving on...")
+        # If analyseUpcomingMatch returns True, the match was scraped successfully.
+        # Otherwise the game is more then 5 minutes away. Scraping will be aborted.
+        if not analyseUpcomingMatch(link): return
 
 if __name__ == "__main__":
     logger.info("Starting scraping at: " + str(datetime.now()))

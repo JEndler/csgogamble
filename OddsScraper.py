@@ -101,6 +101,8 @@ def main():
             print("Match will start in more than 5 minutes | GameID: " + str(link.split("/")[4]))
             print("Aborting scraping... restarting in 5 minutes")
             break
+        else:
+            print("Link: " + link + " didnt work. moving on...")
 
 if __name__ == "__main__":
     print("Starting scraping at: " + str(datetime.now()))

@@ -11,9 +11,9 @@ from csgocrawler import getRawData
 import logging
 
 #TODO add logging.
-fmt_str = '[%(asctime)s] %(levelname)s @ line %(lineno)d: %(message)s'
+fmt_str = '[%(asctime)s] %(levelname)s @ line %(pathname)s: %(message)s'
 # "basicConfig" is a convenience function, explained later
-logging.basicConfig(level=logging.DEBUG, format=fmt_str)
+logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
 def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):

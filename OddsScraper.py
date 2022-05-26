@@ -11,7 +11,7 @@ from csgocrawler import getRawData
 import logging
 
 #TODO add logging.
-fmt_str = '[%(asctime)s] %(levelname)s @ line %(pathname)s: %(message)s'
+fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
 # "basicConfig" is a convenience function, explained later
 logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)

@@ -2,4 +2,6 @@
 
 cd /home/jakob/csgogamble/
 
-poetry run python3 OddsScraper.py
+source /home/jakobendler/.cache/pypoetry/virtualenvs/csgogamble-nKGRdD9L-py3.9/bin/activate
+
+/home/jakobendler/.cache/pypoetry/virtualenvs/csgogamble-nKGRdD9L-py3.9/bin/python /home/jakobendler/Projects/csgogamble/OddsScraper.py

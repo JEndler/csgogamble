@@ -8,8 +8,12 @@ import json
 import time
 from dbConnector import dbConnector
 from csgocrawler import getRawData
+import logging
 
-#TODO add logging.
+fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
+# "basicConfig" is a convenience function, explained later
+logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
+logger = logging.getLogger(__name__)
 
 def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
     """finds all the match links for a given date. defaults to today.
@@ -51,19 +55,31 @@ def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="d
     assert "https://www.hltv.org/matches" in url, "URL is not a valid HLTV match link."
 
     page_soup = getRawData(url)
+    if page_soup is None:
+        logger.error("Could not get page_soup for url: " + url)
+        return False
+    else:
+        logger.info("Got raw data for " + url)
 
     # if there is more than an hour left for the game to start, we don't want to scrape it
-    if 'h' in page_soup.find("div", {"class": "countdown"}).text: return False
-    
+    if 'h' in page_soup.find("div", {"class": "countdown"}).text: 
+        logger.error("No Countdown found on HLTV page. Aborting scraping...")
+        return False
+
     # gets the minutes till the game starts, from the countdown element on the match page.
-    minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
-    
+    try:
+        minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
+    except ValueError:
+        logger.error("Game is already live. Returning True to move on to next Game.")
+        return True
+
     gameID = str(url.split("/")[4])
     res = {}
 
     # save the scraped html to file
     if save_to_file and minutes_till_game < scraping_window:
         with open(str(path + gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
+            logger.info("Wrote html to file for " + url)
             file.write(str(page_soup.html))
 
     # if the game will start in the scraping window (5 min by default), scrape the betting odds
@@ -74,13 +90,15 @@ def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="d
                 href = provider.find("a", {"href": True})["href"]
                 res[href] = odds
             except Exception as e:
-                print(e)
+                logger.error(e)
 
         assert len(res) > 0, "No odds found for this match."
 
         saveOddsToDB(res, gameID, url)
-        print("Wrote odds to DB | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
+        logger.info("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
         return True
+    logger.info("Game will start in " + str(minutes_till_game) + " minutes. Aborting scraping...")
+    return False
 
 
 def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
@@ -99,11 +117,10 @@ def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
 def main():
     _HLTV_MATCHES = "https://www.hltv.org/matches"
     for link in findMatchLinks(getRawData(_HLTV_MATCHES)):
-        if analyseUpcomingMatch(link) == False:
-            print("Match will start in more than 5 minutes | GameID: " + str(link.split("/")[4]))
-            print("Aborting scraping... restarting in 5 minutes")
-            break
+        # If analyseUpcomingMatch returns True, the match was scraped successfully.
+        # Otherwise the game is more then 5 minutes away. Scraping will be aborted.
+        if not analyseUpcomingMatch(link): return
 
 if __name__ == "__main__":
-    print("Starting scraping at: " + str(datetime.now()))
+    logger.info("Starting scraping at: " + str(datetime.now()))
     main()

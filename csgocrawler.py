@@ -8,13 +8,14 @@ import json
 import proxyManager as pM
 import sys
 import cloudscraper
+import logging
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
 it scrapes the relevant Data and hands it over to the Database Manager
 Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
-_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36'''
+_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36'''
 
 # proxy.txt needs to contain NordVPN Proxy Username and Password
 # try:
@@ -26,7 +27,15 @@ _UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
 #     PROXY_USR, PROXY_PW = None, None
 proxies = pM.ProxyManager(validateProxies=False)
 use_proxy = False
+proxies = {
+    "http": "http://JEndler:jjYHprBA9@geo.iproyal.com:12323",
+    "https": "http://JEndler:jjYHprBA9@geo.iproyal.com:12323"
+}
 
+fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
+# "basicConfig" is a convenience function, explained later
+logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
+logger = logging.getLogger(__name__)
 
 def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
     """
@@ -49,8 +58,12 @@ def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
 
         cs = cloudscraper.create_scraper()
 
-        page_html = cs.get(url).text
-        
+        page_html = cs.get(url, proxies=proxies, headers=headers).text
+
+        if page_html is None:
+            logger.error("Could not get page_html for url: " + url)
+            return None
+
     except Exception as e:
         print(e)
         print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")

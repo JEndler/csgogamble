@@ -35,7 +35,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="data/upcoming_matches/") -> bool:
+def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="data/upcoming_matches/") -> bool:
     """Scrapes Betting Odds for the given url. Returns True if successful, False if not. 
 
     Args:
@@ -66,7 +66,7 @@ def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="
         with open(str(path + gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
             file.write(str(page_soup.html))
 
-    # if the game will start in the next 5 minutes, scrape the betting odds
+    # if the game will start in the scraping window (5 min by default), scrape the betting odds
     if minutes_till_game < scraping_window:
         for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
             try:
@@ -76,8 +76,10 @@ def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="
             except Exception as e:
                 print(e)
 
+        assert len(res) > 0, "No odds found for this match."
+
         saveOddsToDB(res, gameID, url)
-        print("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
+        print("Wrote odds to DB | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
         return True
 
 

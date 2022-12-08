@@ -63,7 +63,7 @@ def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="d
 
     # if there is more than an hour left for the game to start, we don't want to scrape it
     if 'h' in page_soup.find("div", {"class": "countdown"}).text: 
-        logger.error("No Countdown found on HLTV page. Aborting scraping...")
+        logger.error("Game further than 1hr away. Aborting scraping...")
         return False
 
     # gets the minutes till the game starts, from the countdown element on the match page.

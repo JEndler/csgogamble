@@ -5,7 +5,6 @@ import datetime
 import dbConnector
 import time
 import json
-import proxyManager as pM
 import sys
 import cloudscraper
 import logging
@@ -25,7 +24,7 @@ Relevant Data can be found in the "DatabaseLayout.PNG" File
 #     print(str("https://" + PROXY_USR + ":" + PROXY_PW + "@de867.nordvpn.com"))
 # except Exception:
 #     PROXY_USR, PROXY_PW = None, None
-proxies = pM.ProxyManager(validateProxies=False)
+
 use_proxy = False
 proxies = {
     "http": "http://JEndler:jjYHprBA9@geo.iproyal.com:12323",

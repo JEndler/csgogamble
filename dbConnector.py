@@ -19,13 +19,14 @@ class dbConnector():
         if type == "sqlite3":
             self.conn = sqlite3.connect(self.DB_FILEPATH)
         if type == "psql":
-            self.conn = psycopg2.connect("dbname='jakob' user='jakob' host='localhost' password=''")
+            # docker run --name csgocrawler_postgres -e POSTGRES_USER=jakob -e POSTGRES_PASSWORD=yeet1509 -p 5433:5432 -v ~/csgo-postgres-data:/var/lib/postgresql/data -d --restart=unless-stopped postgres
+            self.conn = psycopg2.connect("dbname='jakob' user='jakob' host='localhost' port='5433' password='yeet1509'")
 
     def createDatabase(self):
         c = self.conn.cursor()
         command = """
         CREATE TABLE IF NOT EXISTS Matches (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ID INTEGER PRIMARY KEY,
             date TEXT,
             HLTVID INTEGER NOT NULL UNIQUE,
             team1ID INTEGER,
@@ -35,7 +36,7 @@ class dbConnector():
         );
 
         CREATE TABLE IF NOT EXISTS Games (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ID INTEGER PRIMARY KEY,
             map TEXT,
             matchID INTEGER NOT NULL,
             scoreTeam1 INTEGER NOT NULL,
@@ -49,13 +50,13 @@ class dbConnector():
         );
 
         CREATE TABLE IF NOT EXISTS Players (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ID INTEGER PRIMARY KEY,
             HLTVID INTEGER UNIQUE,
             playerName TEXT
         );
 
         CREATE TABLE IF NOT EXISTS Teams (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ID INTEGER PRIMARY KEY,
             Name TEXT,
             HLTVID INTEGER UNIQUE,
             currentPlayerIDs TEXT,
@@ -77,7 +78,7 @@ class dbConnector():
         );
         
         CREATE TABLE IF NOT EXISTS Odds (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ID INTEGER PRIMARY KEY,
             HLTVID INTEGER,
             game_link TEXT,
             provider_link TEXT,
@@ -87,7 +88,7 @@ class dbConnector():
         );
         
         """
-        c.executescript(command)
+        c.execute(command)
         c.close()
         self.conn.commit()
 

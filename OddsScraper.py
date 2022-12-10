@@ -39,7 +39,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="data/upcoming_matches/") -> bool:
+def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=False, path="data/upcoming_matches/") -> bool:
     """Scrapes Betting Odds for the given url. Returns True if successful, False if not. 
 
     Args:
@@ -76,7 +76,7 @@ def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="d
     gameID = str(url.split("/")[4])
     res = {}
 
-    # save the scraped html to file
+    # save the scraped html to file |  and minutes_till_game < scraping_window
     if save_to_file and minutes_till_game < scraping_window:
         with open(str(path + gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
             logger.info("Wrote html to file for " + url)
@@ -86,6 +86,7 @@ def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=True, path="d
     if minutes_till_game < scraping_window:
         for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
             try:
+                print(provider)
                 odds = [provider.find_all("td")[1].text, provider.find_all("td")[3].text]
                 href = provider.find("a", {"href": True})["href"]
                 res[href] = odds
@@ -109,7 +110,7 @@ def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
         gameID (string): string of the (numeric) gameID.
         url (string): url of the match.
     """
-    db = dbConnector()
+    db = dbConnector(type="psql")
     for key in odds.keys():
         db.updateOddsTable(gameID, url, key, odds[key][0], odds[key][1])
 

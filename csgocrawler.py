@@ -9,13 +9,13 @@ import proxyManager as pM
 import sys
 import cloudscraper
 import logging
+from requests.exceptions import ProxyError, SSLError
 """
 @Author: Jakob Endler
 This Class is responsible for handling the interaction with HLTV
 it scrapes the relevant Data and hands it over to the Database Manager
 Relevant Data can be found in the "DatabaseLayout.PNG" File
 """
-_UAGENT = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36'''
 
 # proxy.txt needs to contain NordVPN Proxy Username and Password
 # try:
@@ -37,7 +37,7 @@ fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
 logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
-def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
+def getRawData(url, waittime=16, crawl_delay=3):
     """
     returns a bs4.soup-Object of the given url
 
@@ -54,15 +54,31 @@ def getRawData(url, useragent=_UAGENT, waittime=16, crawl_delay=3):
         # User Agent Mozilla to Circumvent Security Blocking
         request = "GET / HTTP/1.1\r\n"
 
-        headers = {'user-agent': useragent}
+        cs = cloudscraper.create_scraper(
+            browser={
+            'browser': 'firefox',
+            'platform': 'windows',
+            'mobile': False
+            }
+        )
 
-        cs = cloudscraper.create_scraper()
-
-        page_html = cs.get(url, proxies=proxies, headers=headers).text
+        page_html = cs.get(url, proxies=proxies).text
 
         if page_html is None:
             logger.error("Could not get page_html for url: " + url)
             return None
+
+    except ProxyError as e:
+        print(e)
+        print("ProxyError, waiting for " + str(waittime) + " Seconds, then running again.")
+        time.sleep(waittime)
+        return getRawData(url, waittime=waittime)
+
+    except SSLError as e:
+        print(e)
+        print("SSLError, waiting for " + str(waittime) + " Seconds, then running again.")
+        time.sleep(waittime)
+        return getRawData(url, waittime=waittime)
 
     except Exception as e:
         print(e)

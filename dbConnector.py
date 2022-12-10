@@ -6,6 +6,7 @@ by the Elo-Algorithm and the DNNClassifier
 """
 import sqlite3
 import datetime
+import psycopg2
 
 # TODO: Connect to real Log-File
 def errorlog(errorstring):
@@ -14,8 +15,11 @@ def errorlog(errorstring):
 class dbConnector():
     DB_FILEPATH = "data/csgodata.db"
 
-    def __init__(self):
-        self.conn = sqlite3.connect(self.DB_FILEPATH)
+    def __init__(self, type="sqlite3"):
+        if type == "sqlite3":
+            self.conn = sqlite3.connect(self.DB_FILEPATH)
+        if type == "psql":
+            self.conn = psycopg2.connect("dbname='jakob' user='jakob' host='localhost' password=''")
 
     def createDatabase(self):
         c = self.conn.cursor()
@@ -266,7 +270,7 @@ class dbConnector():
 
 
 def main():
-    connection = dbConnector()
+    connection = dbConnector(type="psql")
     connection.createDatabase()
     print(connection.getLastMatchID())
     connection.close_connection()

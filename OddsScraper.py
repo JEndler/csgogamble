@@ -39,7 +39,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url: str, scraping_window=5, save_to_file=False, path="data/upcoming_matches/") -> bool:
+def analyseUpcomingMatch(url: str, scraping_window=9, save_to_file=False, path="data/upcoming_matches/") -> bool:
     """Scrapes Betting Odds for the given url. Returns True if successful, False if not. 
 
     Args:

@@ -69,19 +69,19 @@ def getRawData(url, waittime=16, crawl_delay=3):
 
     except ProxyError as e:
         print(e)
-        print("ProxyError, waiting for " + str(waittime) + " Seconds, then running again.")
+        logger.info("ProxyError, waiting for " + str(waittime) + " Seconds, then running again.")
         time.sleep(waittime)
         return getRawData(url, waittime=waittime)
 
     except SSLError as e:
         print(e)
-        print("SSLError, waiting for " + str(waittime) + " Seconds, then running again.")
+        logger.info("SSLError, waiting for " + str(waittime) + " Seconds, then running again.")
         time.sleep(waittime)
         return getRawData(url, waittime=waittime)
 
     except Exception as e:
         print(e)
-        print("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
+        logger.info("HTTPError 429 Too many requests, waiting for " + str(waittime) + " Seconds.")
         time.sleep(waittime)
         return getRawData(url, waittime=waittime * 2)
 

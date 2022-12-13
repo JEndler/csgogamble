@@ -39,7 +39,7 @@ def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
         return match_link_list
 
 
-def analyseUpcomingMatch(url: str, scraping_window=9, save_to_file=False, path="data/upcoming_matches/") -> bool:
+def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="data/upcoming_matches/") -> bool:
     """Scrapes Betting Odds for the given url. Returns True if successful, False if not. 
 
     Args:
@@ -53,6 +53,12 @@ def analyseUpcomingMatch(url: str, scraping_window=9, save_to_file=False, path="
     """
 
     assert "https://www.hltv.org/matches" in url, "URL is not a valid HLTV match link."
+    gameID = str(url.split("/")[4])
+
+    # if the odds for this game are already in the database, we don't need to scrape them again.
+    if dbConnector(type="psql").getOddsForHLTVID(HLTVID = gameID):
+        logger.info("Odds for this game are already in the database. Skipping...")
+        return True
 
     page_soup = getRawData(url)
     if page_soup is None:
@@ -73,7 +79,6 @@ def analyseUpcomingMatch(url: str, scraping_window=9, save_to_file=False, path="
         logger.error("Game is already live. Returning True to move on to next Game.")
         return True
 
-    gameID = str(url.split("/")[4])
     res = {}
 
     # save the scraped html to file |  and minutes_till_game < scraping_window
@@ -84,20 +89,28 @@ def analyseUpcomingMatch(url: str, scraping_window=9, save_to_file=False, path="
 
     # if the game will start in the scraping window (5 min by default), scrape the betting odds
     if minutes_till_game < scraping_window:
-        for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
-            try:
-                print(provider)
-                odds = [provider.find_all("td")[1].text, provider.find_all("td")[3].text]
-                href = provider.find("a", {"href": True})["href"]
-                res[href] = odds
-            except Exception as e:
-                logger.error(e)
+        try:
+            for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
+                try:
+                    odds = [provider.find_all("td")[1].text, provider.find_all("td")[3].text]
+                    href = provider.find("a", {"href": True})["href"]
+                    res[href] = odds
+                except Exception as e:
+                    logger.error(e)
 
-        assert len(res) > 0, "No odds found for this match."
+            assert len(res) > 0, "No odds found for this match."
 
-        saveOddsToDB(res, gameID, url)
-        logger.info("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
-        return True
+            saveOddsToDB(res, gameID, url)
+            logger.info("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
+            return True
+        except AttributeError as e:
+            logger.info("Match-betting-list standard-box not found. Skipping...")
+            logger.error(e)
+            return True
+        except AssertionError as e:
+            logger.info("No odds found for this match. Might be something wrong here...")
+            logger.error(e)
+            return True
     logger.info("Game will start in " + str(minutes_till_game) + " minutes. Aborting scraping...")
     return False
 
@@ -111,6 +124,9 @@ def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
         url (string): url of the match.
     """
     db = dbConnector(type="psql")
+    # print gameID, url, key, odds[key][0], odds[key][1]
+    print(gameID)
+    print(odds)
     for key in odds.keys():
         db.updateOddsTable(gameID, url, key, odds[key][0], odds[key][1])
 

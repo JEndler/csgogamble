@@ -7,10 +7,12 @@ by the Elo-Algorithm and the DNNClassifier
 import sqlite3
 import datetime
 import psycopg2
+import logging
 
-# TODO: Connect to real Log-File
-def errorlog(errorstring):
-    print(errorstring) 
+fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
+# "basicConfig" is a convenience function, explained later
+logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
+logger = logging.getLogger(__name__)
 
 class dbConnector():
     DB_FILEPATH = "data/csgodata.db"
@@ -26,7 +28,7 @@ class dbConnector():
         c = self.conn.cursor()
         command = """
         CREATE TABLE IF NOT EXISTS Matches (
-            ID INTEGER PRIMARY KEY,
+            ID SERIAL PRIMARY KEY,
             date TEXT,
             HLTVID INTEGER NOT NULL UNIQUE,
             team1ID INTEGER,
@@ -36,7 +38,7 @@ class dbConnector():
         );
 
         CREATE TABLE IF NOT EXISTS Games (
-            ID INTEGER PRIMARY KEY,
+            ID SERIAL PRIMARY KEY,
             map TEXT,
             matchID INTEGER NOT NULL,
             scoreTeam1 INTEGER NOT NULL,
@@ -50,13 +52,13 @@ class dbConnector():
         );
 
         CREATE TABLE IF NOT EXISTS Players (
-            ID INTEGER PRIMARY KEY,
+            ID SERIAL PRIMARY KEY,
             HLTVID INTEGER UNIQUE,
             playerName TEXT
         );
 
         CREATE TABLE IF NOT EXISTS Teams (
-            ID INTEGER PRIMARY KEY,
+            ID SERIAL PRIMARY KEY,
             Name TEXT,
             HLTVID INTEGER UNIQUE,
             currentPlayerIDs TEXT,
@@ -78,7 +80,7 @@ class dbConnector():
         );
         
         CREATE TABLE IF NOT EXISTS Odds (
-            ID INTEGER PRIMARY KEY,
+            ID SERIAL PRIMARY KEY,
             HLTVID INTEGER,
             game_link TEXT,
             provider_link TEXT,
@@ -103,11 +105,11 @@ class dbConnector():
             c.execute("""
             INSERT INTO Matches
             (date, HLTVID, team1ID, team2ID, scraped_at, link)
-            VALUES (?,?,?,?,?,?)
+            VALUES (%s,%s,%s,%s,%s,%s)
             """, tpl)
         except Exception:
             pass
-            # errorlog("ERROR: Match with ID: " + str(HLTVID) + " could not be added.")
+            # logger.info("ERROR: Match with ID: " + str(HLTVID) + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -119,12 +121,31 @@ class dbConnector():
             c.execute("""
                 INSERT INTO Odds
                 (HLTVID, game_link, provider_link, odds_team1, odds_team2, scraped_at)
-                VALUES (?,?,?,?,?,?)
+                VALUES (%s,%s,%s,%s,%s,%s)
             """, tpl)
-        except Exception:
-            errorlog("ERROR: Odds for Game with ID: " + str(HLTVID) + " could not be added.")
+        except Exception as e:
+            logger.error(e)
+            logger.info("ERROR: Odds for Game with ID: " + str(HLTVID) + " could not be added.")
         c.close()
         self.conn.commit()
+
+    def getOddsForHLTVID(self, HLTVID: str):
+        c = self.conn.cursor()
+        tpl = (HLTVID,)
+        try:
+            c.execute("""
+                SELECT * FROM Odds WHERE HLTVID = %s
+            """, tpl)
+            result = c.fetchall()
+        except Exception as e:
+            logger.error(e)
+            logger.info("ERROR: Odds for Game with ID: " + str(HLTVID) + " could not be added.")
+        c.close()
+        self.conn.commit()
+        if result == []:
+            return False
+        else:
+            return result
 
     def updateGameTable(self, map: str, matchID: int, scoreTeam1: int, scoreTeam2: int, link: str, HLTVID: str, individualRoundWins: str = "", team1IDs: str = "", team2IDs: str = ""):
         c = self.conn.cursor()
@@ -134,11 +155,11 @@ class dbConnector():
             c.execute("""
                 INSERT INTO Games
                 (map, matchID, scoreTeam1, scoreTeam2, individualRoundWins, link, HLTVID, team1IDs, team2IDs)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, tpl)
         except Exception as e:
-            errorlog("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
-            print(e)
+            logger.info("ERROR: Game with ID: " + str(HLTVID) + " could not be added.")
+            logger.error(e)
         finally:
             c.close()
             self.conn.commit()
@@ -149,11 +170,11 @@ class dbConnector():
         try:
             c.execute("""
                 INSERT INTO Players (HLTVID, playerName)
-                VALUES (?,?)
+                VALUES (%s,%s)
             """, tpl)
         except Exception:
             pass
-            # errorlog("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")
+            # logger.info("ERROR: Player with ID: " + str(HLTVID) + " and Name: " + playerName + " could not be added.")
         finally:
             c.close()
             self.conn.commit()
@@ -162,19 +183,19 @@ class dbConnector():
         # currentPlayerIDs MUST be a SORTED string like 123;234;345;567;896
         c = self.conn.cursor()
         c.execute("""
-            SELECT currentPlayerIDs FROM Teams WHERE HLTVID = ?
+            SELECT currentPlayerIDs FROM Teams WHERE HLTVID = %s
         """, (HLTVID, ))
         if c.fetchone() is None:
             c.execute("""
                 INSERT INTO Teams (Name, HLTVID, currentPlayerIDs, lastRosterChange)
-                VALUES (?,?,?,?)
+                VALUES (%s,%s,%s,%s)
             """, (Name, HLTVID, currentPlayerIDs, str(datetime.datetime.now())))
         elif currentPlayerIDs == c.fetchone():
             pass
         else:
             c.execute("""
-                UPDATE Teams SET currentPlayerIDs=? , lastRosterChange=?
-                WHERE HLTVID = ?
+                UPDATE Teams SET currentPlayerIDs=%s , lastRosterChange=%s
+                WHERE HLTVID = %s
             """, (currentPlayerIDs, str(datetime.datetime.now()), HLTVID))
         c.close()
         self.conn.commit()
@@ -185,7 +206,7 @@ class dbConnector():
         c.execute("""
             INSERT INTO PlayerGameStats
             (playerID, gameID, kills, deaths, ADR, rating, teamID)
-            VALUES (?,?,?,?,?,?,?)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
         """, tpl)
         c.close()
         self.conn.commit()
@@ -197,22 +218,22 @@ class dbConnector():
 
     def getGameID(self, HLTVID):
         c = self.conn.cursor()
-        c.execute("SELECT ID FROM GAMES WHERE HLTVID = ?", (HLTVID,))
+        c.execute("SELECT ID FROM GAMES WHERE HLTVID = %s", (HLTVID,))
         return c.fetchone()[0]
 
     def loadGamesUntilDay(self, Day):
         c = self.conn.cursor()
-        c.execute("SELECT GAMES.ID FROM GAMES JOIN MATCHES ON GAMES.MATCHID=MATCHES.HLTVID WHERE MATCHES.DATE < ? AND GAMES.INDIVIDUALROUNDWINS != '-1'", (Day,))
+        c.execute("SELECT GAMES.ID FROM GAMES JOIN MATCHES ON GAMES.MATCHID=MATCHES.HLTVID WHERE MATCHES.DATE < %s AND GAMES.INDIVIDUALROUNDWINS != '-1'", (Day,))
         return [x[0] for x in c.fetchall()]
 
     def getMatchID(self, gameID):
         c = self.conn.cursor()
-        c.execute("SELECT MATCHID FROM GAMES WHERE HLTVID = ?", (gameID,))
+        c.execute("SELECT MATCHID FROM GAMES WHERE HLTVID = %s", (gameID,))
         return c.fetchone()[0]
 
     def getWinner(self, gameID):
         c = self.conn.cursor()
-        c.execute("SELECT scoreTeam1, scoreTeam2 FROM GAMES WHERE HLTVID = ?", (gameID,))
+        c.execute("SELECT scoreTeam1, scoreTeam2 FROM GAMES WHERE HLTVID = %s", (gameID,))
         if scoreTeam1 > scoreTeam2:
             return 1
         elif scoreTeam2 > scoreTeam1:
@@ -222,13 +243,13 @@ class dbConnector():
 
     def loadNextGames(self, gameID):
         c = self.conn.cursor()
-        c.execute("SELECT ID FROM GAMES WHERE ID > ?", (gameID,))
+        c.execute("SELECT ID FROM GAMES WHERE ID > %s", (gameID,))
         return [x[0] for x in c.fetchall()]
 
     def _getPredictiondata(self, gameID):
         c = self.conn.cursor()
         # Needed Team1: [], Tean2: [], IndividualRoundWins: []
-        c.execute("SELECT playerID, teamID FROM PlayerGameStats WHERE gameID = ?", (gameID, ))
+        c.execute("SELECT playerID, teamID FROM PlayerGameStats WHERE gameID = %s", (gameID, ))
         players = c.fetchall()
         data = {}
         data["gameID"] = gameID
@@ -237,11 +258,11 @@ class dbConnector():
                 data[player[1]].append(player[0])
             else:
                 data[player[1]] = [player[0]]
-        c.execute("SELECT matchID FROM Games WHERE ID = ?", (gameID, ))
+        c.execute("SELECT matchID FROM Games WHERE ID = %s", (gameID, ))
         data["matchHLTVID"] = c.fetchone()[0]
-        c.execute("SELECT team1ID, team2ID, link FROM Matches WHERE HLTVID = ?", (data["matchHLTVID"], ))
+        c.execute("SELECT team1ID, team2ID, link FROM Matches WHERE HLTVID = %s", (data["matchHLTVID"], ))
         teams = c.fetchone()
-        c.execute("SELECT map, scoreTeam1, scoreTeam2, individualRoundWins FROM Games WHERE ID = ?", (gameID, ))
+        c.execute("SELECT map, scoreTeam1, scoreTeam2, individualRoundWins FROM Games WHERE ID = %s", (gameID, ))
         gamedata = c.fetchone()
         if gamedata[1] == gamedata[2]:
             data["winner"] = None
@@ -273,9 +294,10 @@ class dbConnector():
 def main():
     connection = dbConnector(type="psql")
     connection.createDatabase()
-    print(connection.getLastMatchID())
+    print(connection.getOddsForHLTVID("236048450"))
+    #connection.updateOddsTable(11, 'test', 'test',1.2, 1.75)
     connection.close_connection()
-    print("Success")
+    logger.info("Success")
 
 
 if __name__ == "__main__":

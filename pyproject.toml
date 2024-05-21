@@ -6,7 +6,7 @@ authors = ["Jakob Endler <jakob@endler.tech>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-requests = "^2.27.1"
+requests = "^2.32.0"
 bs4 = "^0.0.1"
 sqlite3-api = "^2.0.4"
 pandas = "^1.4.2"

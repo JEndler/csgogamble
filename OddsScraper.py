@@ -1,143 +1,160 @@
 # @Author: Jakob Endler
-# OddsScraper
-from urllib.request import urlopen
-from urllib.request import Request
+# OddsScraper - Minimal version for single URL
 from bs4 import BeautifulSoup as soup
 from datetime import datetime
-import json
-import time
-from dbConnector import dbConnector
 from csgocrawler import getRawData
 import logging
+import sys
+import os
+from pathlib import Path
 
 fmt_str = '[%(asctime)s] %(levelname)s @ %(filename)s: %(message)s'
-# "basicConfig" is a convenience function, explained later
 logging.basicConfig(level=logging.DEBUG, format=fmt_str, datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
-def findMatchLinks(page_soup, date=datetime.today().strftime('%Y-%m-%d')):
-    """finds all the match links for a given date. defaults to today.
+
+def saveHtmlToFile(html_content: str, game_id: str, storage_type: str = "local") -> str:
+    """Save HTML content to file or cloud storage.
+    
+    Args:
+        html_content (str): Raw HTML content to save
+        game_id (str): Game ID for file naming
+        storage_type (str): 'local' for file system, 'r2' for Cloudflare R2 (future)
+    
+    Returns:
+        str: Path/URL where the file was saved
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{game_id}_{timestamp}.html"
+    
+    if storage_type == "local":
+        # Create directory if it doesn't exist
+        html_dir = Path("data/html_snapshots")
+        html_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = html_dir / filename
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        logger.info(f"HTML saved to: {file_path}")
+        return str(file_path)
+    
+    elif storage_type == "r2":
+        # TODO: Implement Cloudflare R2 upload
+        # This would involve:
+        # 1. Configure R2 credentials
+        # 2. Upload file to R2 bucket
+        # 3. Return R2 URL
+        logger.warning("R2 storage not yet implemented, falling back to local")
+        return saveHtmlToFile(html_content, game_id, "local")
+    
+    else:
+        raise ValueError(f"Unknown storage type: {storage_type}")
+
+
+def scrapeMatchOdds(url: str, save_html: bool = False, storage_type: str = "local") -> dict:
+    """Scrapes betting odds for a single HLTV match URL.
 
     Args:
-        page_soup (bs4.BeautifulSoup): bs4 object of the page to scrape.
-        date (datetime, optional): Date to scrape matches for. Defaults to datetime.today().strftime('%Y-%m-%d').
+        url (str): HLTV match URL
+        save_html (bool): Whether to save the raw HTML
+        storage_type (str): Where to save HTML ('local' or 'r2')
 
     Returns:
-        match_link_list (list): list of url strings of the matches.
-
-    >>> findMatchLinks(getRawData("https://www.hltv.org/matches")) #doctest: +ELLIPSIS
-    ['https://www.hltv.org/matches...', ...]
-    """    
-    match_link_list = []
-    matches = page_soup.find("div", {"class": "upcomingMatchesContainer"})
-    for matchday_section in matches.find_all("div", {"class": "upcomingMatchesSection"}):
-        for link in matchday_section.findAll("a", {"href": True}):
-            if "/matches/" in str(link["href"]):
-                match_link_list.append("https://www.hltv.org" + str(link['href']))
-        # return in the first loop iteration, because we only need the next day of matches
-        #TODO add date check.
-        return match_link_list
-
-
-def analyseUpcomingMatch(url: str, scraping_window=10, save_to_file=True, path="data/upcoming_matches/") -> bool:
-    """Scrapes Betting Odds for the given url. Returns True if successful, False if not. 
-
-    Args:
-        url (string): _description_
-        scraping_window (int, optional): The amount of minutes a game needs to be from starting to be scraped. Defaults to 10.
-        save_to_file (bool, optional): _description_. Defaults to True.
-        path (str, optional): _description_. Defaults to "data/upcoming_matches".
-
-    Returns:
-        Boolean: returns True if the match was scraped successfully, meaning the match had less then 5 minutes till starting.
+        dict: Dictionary containing betting odds from different providers
     """
 
     assert "https://www.hltv.org/matches" in url, "URL is not a valid HLTV match link."
     gameID = str(url.split("/")[4])
 
-    # if the odds for this game are already in the database, we don't need to scrape them again.
-    if dbConnector(type="psql").getOddsForHLTVID(HLTVID = gameID):
-        logger.info("Odds for this game are already in the database. Skipping...")
-        return True
-
     page_soup = getRawData(url)
     if page_soup is None:
         logger.error("Could not get page_soup for url: " + url)
-        return False
+        return {}
     else:
         logger.info("Got raw data for " + url)
+        
+        # Save HTML if requested
+        if save_html:
+            try:
+                html_content = str(page_soup)
+                saved_path = saveHtmlToFile(html_content, gameID, storage_type)
+                logger.info(f"Raw HTML saved to: {saved_path}")
+            except Exception as e:
+                logger.error(f"Failed to save HTML: {e}")
 
-    # if there is more than an hour left for the game to start, we don't want to scrape it
-    if 'h' in page_soup.find("div", {"class": "countdown"}).text: 
-        logger.error("Game further than 1hr away. Aborting scraping...")
-        return False
-
-    # gets the minutes till the game starts, from the countdown element on the match page.
-    try:
-        minutes_till_game = int(page_soup.find("div", {"class": "countdown"}).text.split(":")[0].strip().replace("m",""))
-    except ValueError:
-        logger.error("Game is already live. Returning True to move on to next Game.")
-        return True
-
-    res = {}
-
-    # save the scraped html to file |  and minutes_till_game < scraping_window
-    if save_to_file and minutes_till_game < scraping_window:
-        with open(str(path + gameID + "_" + str(datetime.now()).split(" ")[0] + '.html'), 'w') as file:
-            logger.info("Wrote html to file for " + url)
-            file.write(str(page_soup.html))
-
-    # if the game will start in the scraping window (5 min by default), scrape the betting odds
-    if minutes_till_game < scraping_window:
+    # Check if game is live or upcoming
+    countdown_elem = page_soup.find("div", {"class": "countdown"})
+    if countdown_elem and 'h' in countdown_elem.text:
+        logger.info("Game is more than 1 hour away")
+    elif countdown_elem:
         try:
-            for provider in page_soup.find("div", {"class": "match-betting-list standard-box"}).find_all("tr", {"class": True}):
+            minutes_till_game = int(countdown_elem.text.split(":")[0].strip().replace("m",""))
+            logger.info(f"Game starts in {minutes_till_game} minutes")
+        except ValueError:
+            logger.info("Game is already live")
+
+    odds = {}
+    
+    try:
+        betting_section = page_soup.find("div", {"class": "match-betting-list standard-box"})
+        if betting_section:
+            for provider in betting_section.find_all("tr", {"class": True}):
                 try:
-                    odds = [provider.find_all("td")[1].text, provider.find_all("td")[3].text]
-                    href = provider.find("a", {"href": True})["href"]
-                    res[href] = odds
+                    tds = provider.find_all("td")
+                    if len(tds) >= 4:
+                        provider_name_elem = tds[0].find("img")
+                        if provider_name_elem and provider_name_elem.get("alt"):
+                            provider_name = provider_name_elem["alt"]
+                        else:
+                            provider_name = tds[0].get_text(strip=True) or "Unknown Provider"
+                        
+                        odds_1 = tds[1].get_text(strip=True)
+                        odds_2 = tds[3].get_text(strip=True)
+                        
+                        if odds_1 and odds_2:
+                            odds[provider_name] = [odds_1, odds_2]
                 except Exception as e:
-                    logger.error(e)
+                    continue
+        else:
+            logger.info("No betting odds section found")
+    except Exception as e:
+        logger.error(f"Error scraping odds: {e}")
+    
+    return odds
 
-            assert len(res) > 0, "No odds found for this match."
-
-            saveOddsToDB(res, gameID, url)
-            logger.info("Wrote odds to File | GameID: " + str(gameID) + " | scraped at: " + str(datetime.now()))
-            return True
-        except AttributeError as e:
-            logger.info("Match-betting-list standard-box not found. Skipping...")
-            logger.error(e)
-            return True
-        except AssertionError as e:
-            logger.info("No odds found for this match. Might be something wrong here...")
-            logger.error(e)
-            return True
-    logger.info("Game will start in " + str(minutes_till_game) + " minutes. Aborting scraping...")
-    return False
-
-
-def saveOddsToDB(odds: dict, gameID: str, url: str) -> None:
-    """takes a dictionary of odds and saves them to the database.
-
-    Args:
-        odds (dictionary): dictionary of odds to save, the key is the betting provider link.
-        gameID (string): string of the (numeric) gameID.
-        url (string): url of the match.
-    """
-    db = dbConnector(type="psql")
-    # print gameID, url, key, odds[key][0], odds[key][1]
-    print(gameID)
-    print(odds)
-    for key in odds.keys():
-        db.updateOddsTable(gameID, url, key, odds[key][0], odds[key][1])
 
 
 def main():
-    _HLTV_MATCHES = "https://www.hltv.org/matches"
-    for link in findMatchLinks(getRawData(_HLTV_MATCHES)):
-        # If analyseUpcomingMatch returns True, the match was scraped successfully.
-        # Otherwise the game is more then 5 minutes away. Scraping will be aborted.
-        if not analyseUpcomingMatch(link): return
+    if len(sys.argv) < 2:
+        print("Usage: python OddsScraper.py <HLTV_MATCH_URL> [--save-html] [--storage=local|r2]")
+        print("Options:")
+        print("  --save-html    Save raw HTML to storage")
+        print("  --storage=TYPE Storage type: 'local' (default) or 'r2' (Cloudflare R2)")
+        sys.exit(1)
+    
+    url = sys.argv[1] 
+    save_html = "--save-html" in sys.argv
+    
+    # Parse storage type
+    storage_type = "local"
+    for arg in sys.argv:
+        if arg.startswith("--storage="):
+            storage_type = arg.split("=")[1]
+            break
+    
+    logger.info(f"Scraping odds for: {url}")
+    if save_html:
+        logger.info(f"HTML will be saved using {storage_type} storage")
+    
+    odds = scrapeMatchOdds(url, save_html=save_html, storage_type=storage_type)
+    
+    if odds:
+        print(f"\nFound odds from {len(odds)} providers:")
+        for provider, odds_data in odds.items():
+            print(f"{provider:<20} | {odds_data[0]:>6} vs {odds_data[1]:<6}")
+    else:
+        print("No odds found for this match")
 
 if __name__ == "__main__":
-    logger.info("Starting scraping at: " + str(datetime.now()))
     main()

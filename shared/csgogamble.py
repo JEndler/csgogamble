@@ -1,15 +1,15 @@
-import predictionHandler as pH
-import OddsScraper
-import proxyManager as pM
+import analytics.prediction_handler as pH
+import scraper.odds_scraper as odds_scraper
+import scraper.proxy_manager as pM
 from bs4 import BeautifulSoup as soup
-from csgocrawler import _analyseTeamTable
-from dbConnector import dbConnector
+from scraper.crawler import _analyseTeamTable
+from database.connector import dbConnector
 
 
 class csgogamble():
     def __init__(self):
         self.predictions = pH.predictionHandler()
-        self.odds = OddsScraper.loadOdds()
+        self.odds = odds_scraper.loadOdds()
         self.proxies = pM.ProxyManager(debug=False, validateProxies=False)
         self.db = dbConnector()
 

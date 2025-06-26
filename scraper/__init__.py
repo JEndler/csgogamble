@@ -1,0 +1,1 @@
+"""Scraping functionality for HLTV data."""

@@ -2,7 +2,7 @@
 # OddsScraper - Minimal version for single URL
 from bs4 import BeautifulSoup as soup
 from datetime import datetime
-from csgocrawler import getRawData
+from scraper.crawler import getRawData
 import logging
 import sys
 import os
@@ -29,7 +29,7 @@ def saveHtmlToFile(html_content: str, game_id: str, storage_type: str = "local")
     
     if storage_type == "local":
         # Create directory if it doesn't exist
-        html_dir = Path("data/html_snapshots")
+        html_dir = Path("storage/html")
         html_dir.mkdir(parents=True, exist_ok=True)
         
         file_path = html_dir / filename

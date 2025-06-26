@@ -2,7 +2,7 @@ from requests import request, get
 from bs4 import BeautifulSoup as soup
 import pandas as pd
 import datetime
-import dbConnector
+import database.connector as dbConnector
 import time
 import json
 import sys

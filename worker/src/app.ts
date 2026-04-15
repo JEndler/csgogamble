@@ -1,4 +1,11 @@
-import { handleBrowserMatchDebug, handleBrowserResultsDebug, handleBrowserSessionClose } from './browser-debug';
+import {
+  handleBrowserHistoryDebug,
+  handleBrowserLimitsDebug,
+  handleBrowserMatchDebug,
+  handleBrowserResultsDebug,
+  handleBrowserSessionClose,
+  handleBrowserSessionsDebug,
+} from './browser-debug';
 import {
   type HealthResponse,
   parseDemoIngestRequest,
@@ -28,6 +35,18 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   if (request.method === 'GET' && url.pathname === '/debug/browser/results') {
     return handleBrowserResultsDebug(env, url.searchParams.get('pageUrl') ?? undefined);
+  }
+
+  if (request.method === 'GET' && url.pathname === '/debug/browser/limits') {
+    return handleBrowserLimitsDebug(env);
+  }
+
+  if (request.method === 'GET' && url.pathname === '/debug/browser/sessions') {
+    return handleBrowserSessionsDebug(env);
+  }
+
+  if (request.method === 'GET' && url.pathname === '/debug/browser/history') {
+    return handleBrowserHistoryDebug(env);
   }
 
   if (request.method === 'POST' && url.pathname === '/debug/browser/session/close') {

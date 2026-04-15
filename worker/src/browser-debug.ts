@@ -1,3 +1,4 @@
+import puppeteer from '@cloudflare/puppeteer';
 import { type BrowserPageSnapshot, closeBrowserSession, fetchPageSnapshotWithBrowser } from './browser-session';
 import { discoverMatchUrls, findCloudflareChallengeMarkers } from './hltv';
 import { errorResponse, jsonResponse } from './http-response';
@@ -16,6 +17,41 @@ export interface BrowserDebugSummary {
   discoveredMatchUrlCount: number;
   discoveredMatchUrlsSample: string[];
   htmlBytes: number;
+}
+
+export interface BrowserLimitsDebugResponse {
+  ok: true;
+  limits: unknown;
+}
+
+export interface BrowserSessionsDebugResponse {
+  ok: true;
+  sessions: unknown;
+}
+
+export interface BrowserHistoryDebugResponse {
+  ok: true;
+  history: unknown;
+}
+
+interface BrowserDiagnosticsSnapshot {
+  limits: unknown;
+  sessions: unknown;
+  history: unknown;
+}
+
+type BrowserDiagnosticsProvider = (env: Env) => Promise<BrowserDiagnosticsSnapshot>;
+
+const defaultBrowserDiagnosticsProvider: BrowserDiagnosticsProvider = async (env) => ({
+  limits: await puppeteer.limits(env.BROWSER),
+  sessions: await puppeteer.sessions(env.BROWSER),
+  history: await puppeteer.history(env.BROWSER),
+});
+
+let browserDiagnosticsProvider: BrowserDiagnosticsProvider = defaultBrowserDiagnosticsProvider;
+
+export function setBrowserDiagnosticsProviderForTests(next?: BrowserDiagnosticsProvider): void {
+  browserDiagnosticsProvider = next ?? defaultBrowserDiagnosticsProvider;
 }
 
 function extractDocumentTitle(html: string): string | null {
@@ -74,6 +110,49 @@ function readSessionKey(payload: unknown): string | undefined {
   }
 
   return sessionKey;
+}
+
+async function getBrowserDiagnostics(env: Env): Promise<BrowserDiagnosticsSnapshot> {
+  return browserDiagnosticsProvider(env);
+}
+
+export async function handleBrowserLimitsDebug(env: Env): Promise<Response> {
+  try {
+    const diagnostics = await getBrowserDiagnostics(env);
+    const response: BrowserLimitsDebugResponse = {
+      ok: true,
+      limits: diagnostics.limits,
+    };
+    return jsonResponse(response);
+  } catch (error) {
+    return errorResponse(error instanceof Error ? error.message : 'Browser limits debug failed', 500);
+  }
+}
+
+export async function handleBrowserSessionsDebug(env: Env): Promise<Response> {
+  try {
+    const diagnostics = await getBrowserDiagnostics(env);
+    const response: BrowserSessionsDebugResponse = {
+      ok: true,
+      sessions: diagnostics.sessions,
+    };
+    return jsonResponse(response);
+  } catch (error) {
+    return errorResponse(error instanceof Error ? error.message : 'Browser sessions debug failed', 500);
+  }
+}
+
+export async function handleBrowserHistoryDebug(env: Env): Promise<Response> {
+  try {
+    const diagnostics = await getBrowserDiagnostics(env);
+    const response: BrowserHistoryDebugResponse = {
+      ok: true,
+      history: diagnostics.history,
+    };
+    return jsonResponse(response);
+  } catch (error) {
+    return errorResponse(error instanceof Error ? error.message : 'Browser history debug failed', 500);
+  }
 }
 
 export async function handleBrowserResultsDebug(env: Env, pageUrl?: string): Promise<Response> {

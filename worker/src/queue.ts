@@ -184,15 +184,21 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
     browserSessionKey: message.payload.browserSessionKey,
   });
 
-  await enqueueMessages(
-    env,
-    buildIngestMatchMessages(response.matchUrls, {
-      persistHtml: message.payload.persistHtml,
-      source: message.payload.source,
-      acquisitionMode: message.payload.acquisitionMode,
-      browserSessionKey: message.payload.browserSessionKey,
-    }),
-  );
+  const ingestMessages = buildIngestMatchMessages(response.matchUrls, {
+    persistHtml: message.payload.persistHtml,
+    source: message.payload.source,
+    acquisitionMode: message.payload.acquisitionMode,
+    browserSessionKey: message.payload.browserSessionKey,
+  });
+
+  if (message.payload.acquisitionMode === 'browser-session' && message.payload.browserSessionKey) {
+    for (const ingestMessage of ingestMessages) {
+      await processIngestMessage(env, ingestMessage);
+    }
+    return;
+  }
+
+  await enqueueMessages(env, ingestMessages);
 }
 
 async function processIngestMessage(env: Env, message: IngestMatchQueueMessage): Promise<void> {

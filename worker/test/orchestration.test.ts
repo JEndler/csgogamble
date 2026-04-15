@@ -1,12 +1,45 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { handleRequestMock } = vi.hoisted(() => ({
+  handleRequestMock: vi.fn(),
+}));
+
+vi.mock('../src/app', () => ({
+  handleRequest: handleRequestMock,
+}));
+
 import {
   buildIngestMatchMessages,
   createDiscoverResultsMessage,
   createIngestMatchMessage,
   parseQueueMessage,
+  processQueueBatch,
 } from '../src/queue';
+import type { Env, WorkerQueueMessage } from '../src/types';
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}
+
+function createBatch(messages: WorkerQueueMessage[]): MessageBatch<unknown> {
+  return {
+    messages: messages.map((body) => ({
+      body,
+      ack: vi.fn(),
+      retry: vi.fn(),
+    })),
+    queue: 'csgogamble-ingestion',
+  } as unknown as MessageBatch<unknown>;
+}
 
 describe('queue orchestration helpers', () => {
+  beforeEach(() => {
+    handleRequestMock.mockReset();
+  });
+
   it('creates and parses a discover-results queue message', () => {
     const message = createDiscoverResultsMessage({
       pageUrl: 'https://www.hltv.org/results?offset=100',
@@ -46,6 +79,81 @@ describe('queue orchestration helpers', () => {
         browserSessionKey: 'cron-batch-1',
       }),
     ]);
+  });
+
+  it('processes browser-session discovery inline instead of re-queueing per match', async () => {
+    handleRequestMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          pageUrl: 'https://www.hltv.org/results',
+          discovered: 2,
+          matchUrls: [
+            'https://www.hltv.org/matches/123/alpha-vs-beta',
+            'https://www.hltv.org/matches/456/gamma-vs-delta',
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true, fetchedAt: 'now', parsed: {}, artifact: null, notes: [] }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, fetchedAt: 'now', parsed: {}, artifact: null, notes: [] }));
+
+    const sendBatch = vi.fn();
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-123',
+        source: 'cron:test',
+      }),
+    ]);
+
+    await processQueueBatch(batch, {
+      INGESTION_QUEUE: { sendBatch },
+    } as unknown as Env);
+
+    expect(sendBatch).not.toHaveBeenCalled();
+    expect(handleRequestMock).toHaveBeenCalledTimes(3);
+
+    const ingestBodies = await Promise.all(
+      handleRequestMock.mock.calls.slice(1).map(async ([request]) => JSON.parse(await (request as Request).text())),
+    );
+    expect(ingestBodies).toEqual([
+      expect.objectContaining({
+        matchUrl: 'https://www.hltv.org/matches/123/alpha-vs-beta',
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-123',
+      }),
+      expect.objectContaining({
+        matchUrl: 'https://www.hltv.org/matches/456/gamma-vs-delta',
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-123',
+      }),
+    ]);
+  });
+
+  it('re-queues discovered matches for non-session acquisition modes', async () => {
+    handleRequestMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        pageUrl: 'https://www.hltv.org/results',
+        discovered: 1,
+        matchUrls: ['https://www.hltv.org/matches/123/alpha-vs-beta'],
+      }),
+    );
+
+    const sendBatch = vi.fn();
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        acquisitionMode: 'http',
+        source: 'cron:test',
+      }),
+    ]);
+
+    await processQueueBatch(batch, {
+      INGESTION_QUEUE: { sendBatch },
+    } as unknown as Env);
+
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects malformed queue messages', () => {

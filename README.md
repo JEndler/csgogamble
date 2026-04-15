@@ -1,199 +1,114 @@
-# CS2 HLTV Scraper
+# csgogamble
 
-A Cloudflare-native scraping system for CS2 match data and betting odds from HLTV.org. Built for scale, reliability, and cost-effectiveness using Cloudflare's edge infrastructure.
+Cloudflare-centric CS2 match ingestion and data platform.
 
-## Architecture Overview
+The repo is being rebuilt around a TypeScript Cloudflare Worker that discovers HLTV matches, acquires raw HTML, parses detailed match data, stores normalized operational state in D1, and stores raw artifacts in R2.
 
-```
-┌─────────────────┐    ┌───────────────────┐    ┌──────────────┐
-│ Cloudflare      │    │ Python Container  │    │ Cloudflare   │
-│ Worker          │───►│ (Scraping Logic)  │───►│ D1 Database  │
-│ (Scheduling)    │    │                   │    │              │
-└─────────────────┘    └───────────────────┘    └──────────────┘
-         │                        │                      │
-         │                        │                      │
-         ▼                        ▼                      ▼
-┌─────────────────┐    ┌───────────────────┐    ┌──────────────┐
-│ Cloudflare KV   │    │ Cloudflare R2     │    │ External     │
-│ (State/Config)  │    │ (Raw HTML)        │    │ Services     │
-└─────────────────┘    └───────────────────┘    └──────────────┘
-```
+What this repo is for:
+- reliable match-data ingestion
+- historical backfill
+- live match tracking
+- downstream feature generation for prediction models
+- eventual betting automation against Polymarket
 
-## Components
+What this repo is not doing yet:
+- demos at scale
+- odds ingestion
+- model training
+- execution against betting venues
 
-### 1. Python Container
-**Purpose**: Execute heavy scraping operations with existing libraries  
-**Technology**: Docker container running Python 3.10+ with Flask web server  
-**Libraries**: beautifulsoup4, requests, pandas, cloudscraper, psycopg2-binary  
+## Current architecture
 
-**Endpoints**:
-- `POST /scrape-match` - Scrape historical match data
-- `POST /scrape-odds` - Scrape pre-match betting odds  
-- `GET /health` - Container health check
+Target runtime flow:
 
-### 2. Cloudflare Worker
-**Purpose**: Request routing, scheduling, lightweight orchestration  
-**Technology**: TypeScript/JavaScript  
-
-**Responsibilities**:
-- Cron-triggered scraping jobs
-- Route requests to appropriate containers
-- Handle rate limiting and retry logic
-- Coordinate data flow between services
-
-### 3. Cloudflare D1 Database
-**Purpose**: Structured data storage (replace PostgreSQL)  
-**Schema**: Migrate existing tables (Matches, Games, Players, Teams, PlayerGameStats, Odds)  
-**Features**: SQLite-compatible, global replication, integrated with Workers
-
-### 4. Cloudflare R2 Storage
-**Purpose**: Raw HTML file storage  
-**Usage**: Store scraped HTML pages for debugging/archival  
-**Structure**: Organized by date and match ID
-
-### 5. Cloudflare KV
-**Purpose**: Configuration and state management  
-
-**Data**:
-- Last scraped match IDs
-- Proxy lists and rotation state
-- Rate limiting counters
-- Scraping configuration
-
-## Current File Structure
-
-```
-csgo-scraper/
-├── OddsScraper.py          # Minimal odds scraper (single URL)
-├── csgocrawler.py          # Core scraping utilities
-├── dbConnector.py          # Database connection handler
-├── proxyManager.py         # Proxy rotation management
-├── EloHandler.py           # Player rating calculations
-├── predictionHandler.py    # Match prediction logic
-├── data/
-│   ├── html_snapshots/     # Raw HTML storage (local)
-│   └── logs/               # Application logs
-├── poetry.lock             # Python dependencies
-├── pyproject.toml          # Project configuration
-└── README.md               # This file
+```text
+Cron Trigger
+  -> discovery job
+  -> Queue messages per match
+  -> acquisition
+  -> parsing
+  -> D1 persistence
+  -> R2 raw artifact storage
 ```
 
-## Target File Structure
+Current state:
+- the parser and persistence path work locally
+- the cron + queue orchestration skeleton exists in `worker/`
+- reliable Cloudflare-native acquisition against HLTV is still the main open risk
 
-```
-csgo-scraper/
-├── container/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── scraper_server.py
-│   ├── csgocrawler.py
-│   ├── OddsScraper.py
-│   ├── dbConnector.py
-│   └── proxyManager.py
+Primary production app:
+- `worker/` — Cloudflare Worker, D1 migrations, parsing logic, ingestion scripts, tests
+
+Supporting areas:
+- `docs/` — architecture, ingestion flow, plans
+- `archive/python-legacy/` — old Python code kept only for reference during the rebuild
+
+## Design principles
+
+- TypeScript-first
+- Cloudflare-native control plane
+- local-first development with Wrangler
+- raw HTML retained for debugging and parser evolution
+- acquisition separated from parsing/persistence
+- operational ingest system first, ML pipeline second
+
+## Repository layout
+
+```text
+csgogamble/
 ├── worker/
-│   ├── src/
-│   │   ├── index.ts
-│   │   ├── scheduler.ts
-│   │   └── container-client.ts
-│   ├── wrangler.toml
-│   └── package.json
-├── database/
-│   ├── schema.sql
-│   ├── migration.sql
-│   └── seed-data.sql
+├── docs/
+├── archive/python-legacy/
 └── README.md
 ```
 
-## Features
+## Worker package
 
-### Current
-- ✅ Single-URL odds scraping from HLTV
-- ✅ HTML snapshot saving with timestamps
-- ✅ Provider name extraction and clean output formatting
-- ✅ Configurable storage backends (local/R2 ready)
-- ✅ Comprehensive error handling and logging
+Inside `worker/`:
+- HTTP endpoints for local verification and manual ingest
+- HLTV parsing helpers
+- D1 persistence layer
+- R2 artifact storage
+- local Playwright-based acquisition scripts
 
-### In Development
-- 🚧 Cloudflare Worker integration
-- 🚧 D1 database migration
-- 🚧 R2 HTML storage
-- 🚧 Scheduled scraping jobs
+Useful commands:
 
-## Quick Start
-
-### Prerequisites
-- Python 3.10+
-- Poetry for dependency management
-
-### Installation
 ```bash
-git clone https://github.com/JEndler/csgogamble.git
-cd csgogamble
-poetry install
+cd worker
+npm install
+npx playwright install chromium
+npm run check
+npm test
+npm run dev
+npm run backfill -- --max 10
 ```
-
-### Usage
-```bash
-# Basic odds scraping
-poetry run python OddsScraper.py "https://www.hltv.org/matches/2383214/match-url"
-
-# Save HTML snapshots
-poetry run python OddsScraper.py "https://www.hltv.org/matches/2383214/match-url" --save-html
-
-# Future: R2 storage
-poetry run python OddsScraper.py "URL" --save-html --storage=r2
-```
-
-## Deployment
-
-### Container Deployment
-*Coming soon - Docker containerization for Cloudflare deployment*
-
-### Worker Deployment  
-*Coming soon - Cloudflare Worker setup and deployment*
-
-### Database Setup
-*Coming soon - D1 database schema and migration scripts*
 
 ## Roadmap
 
-### Phase 1: Infrastructure Migration
-- [ ] Containerize Python scraping logic
-- [ ] Deploy Cloudflare Worker for orchestration
-- [ ] Migrate PostgreSQL to Cloudflare D1
-- [ ] Implement R2 HTML storage
-- [ ] Set up KV for configuration management
+Phase 0:
+- clean repo structure
+- archive old Python system
+- rewrite docs to match reality
 
-### Phase 2: Enhanced Scraping
-- [ ] Automated match discovery and scraping
-- [ ] Historical data backfill
-- [ ] Real-time odds monitoring
-- [ ] Advanced proxy rotation
+Phase 1:
+- make the Worker the canonical application
+- add scheduled and queue-driven orchestration
+- improve module boundaries and observability
 
-### Phase 3: Analytics & Predictions
-- [ ] Migrate Elo rating system
-- [ ] Machine learning-based predictions
-- [ ] Performance analytics dashboard
-- [ ] API for external integrations
+Phase 2:
+- validate Cloudflare-native browser acquisition against HLTV
+- fall back to an external acquisition seam if needed
 
-### Phase 4: User Interface
-- [ ] Minimal web interface for predictions
-- [ ] Real-time match tracking
-- [ ] Historical data visualization
-- [ ] Betting odds comparison tools
+Phase 3:
+- historical backfill at scale
+- richer match detail extraction
+- feature exports for modeling
 
-## Contributing
+Phase 4:
+- live tracking, prediction infrastructure, and market execution
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+## Hard truth
 
-## License
-
-[License information to be added]
-
-## Support
-
-For questions and support, please open an issue on GitHub.
+The parser is not the scary part anymore.
+The real technical risk is reliable acquisition from HLTV under anti-bot protections.
+So the rebuild is optimizing around that reality instead of pretending plain fetch will somehow start working out of nowhere.

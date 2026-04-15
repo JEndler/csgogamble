@@ -1,10 +1,33 @@
-*.txt
-*.db
-*.csv
-data/*
-/data
-/data/*
-*.pyc
-*.ipynb
-*.ipynb_checkpoints
-poetry.lock
+# Node / package manager
+node_modules/
+.npm/
+.pnpm-store/
+worker/node_modules/
+
+# Cloudflare local state
+.wrangler/
+worker/.wrangler/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Hermes local planning state
+.hermes/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+
+# Logs and temp artifacts
+*.log
+/tmp/
+
+# Legacy local artifacts
+archive/python-legacy/.venv/
+archive/python-legacy/**/__pycache__/
+data/
+storage/html/

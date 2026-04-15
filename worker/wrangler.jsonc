@@ -1,0 +1,68 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "csgogamble-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "browser": {
+    "binding": "BROWSER",
+    "remote": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "BROWSER_SESSION",
+        "class_name": "BrowserSession"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["BrowserSession"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "INGESTION_QUEUE",
+        "queue": "csgogamble-ingestion"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "csgogamble-ingestion",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30
+      }
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "csgogamble",
+      "database_id": "b885b991-52a1-4df5-a663-0404fa774abf",
+      "preview_database_id": "DB",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "RAW_HTML",
+      "bucket_name": "csgogamble-raw"
+    },
+    {
+      "binding": "DEMOS",
+      "bucket_name": "csgogamble-demos"
+    }
+  ],
+  "vars": {
+    "HLTV_BASE_URL": "https://www.hltv.org"
+  }
+}

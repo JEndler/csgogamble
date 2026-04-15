@@ -1,236 +1,98 @@
-# CS2 HLTV Scraper - Development Guidelines
+# csgogamble - Development Guide
 
-This document outlines the coding standards, project structure, and development workflow for the CS2 HLTV Scraper project.
+This repo is now Worker-first and TypeScript-first.
 
-## Project Overview
+## Project direction
 
-A Cloudflare-native scraping system for CS2 match data and betting odds, serving as a learning opportunity for Cloudflare-centric architecture patterns.
+`worker/` is the canonical application.
 
-## Python Code Standards
+The goal is to build a Cloudflare-centric ingestion platform for HLTV match data:
+- scheduled discovery
+- queued ingestion
+- acquisition of raw HTML
+- parsing into normalized match/map/player data
+- D1 as the operational store
+- R2 as the raw artifact store
 
-### Type Hints & Annotations
-- **Strict typing required**: All function parameters and return types must have type hints
-- **No Union syntax**: Use `Union[str, int]` instead of `str | int` 
-- **Forward references**: Use `from __future__ import annotations` when needed
+Legacy Python code lives under `archive/python-legacy/` for reference only. Do not build new production code there.
 
-```python
-from typing import Dict, List, Optional, Union
-from datetime import datetime
+## Current priorities
 
-def scrape_match_odds(url: str, save_html: bool = False) -> Dict[str, List[str]]:
-    """Scrape betting odds for a single HLTV match URL."""
-    pass
+1. Make scheduled ingestion run reliably on Cloudflare.
+2. Keep the parsing/persistence layer clean and strongly typed.
+3. Preserve raw HTML for debugging and parser iteration.
+4. Build a sane foundation for later ML and live prediction work.
+
+## Standards
+
+### TypeScript
+- strict typing
+- no `any` unless there is a very good reason
+- small, boring modules over giant files
+- prefer explicit request/response contracts
+- document parser assumptions when HTML is brittle
+
+### Formatting and linting
+- formatter: Biome
+- linting: Biome
+- typecheck: `tsc --noEmit`
+- tests: Vitest
+
+### Cloudflare
+- use Wrangler for local development and deploys
+- D1 migrations live in `worker/migrations/`
+- R2 is for raw HTML and later large artifacts
+- Cron Triggers should drive recurring jobs
+- Queues should decouple discovery from ingest work
+
+## Repo structure
+
+```text
+csgogamble/
+├── worker/                  # production app
+├── docs/                    # architecture and plans
+├── archive/python-legacy/   # historical Python code only
+└── README.md
 ```
 
-### Code Formatting & Style
-- **Formatter**: Black with default settings
-- **Line length**: No strict limit (long lines are acceptable for readability)
-- **Import sorting**: isort for consistent import organization
-- **Docstring style**: Google format
+## Worker workflow
 
-```python
-def example_function(param1: str, param2: int) -> Optional[str]:
-    """Example function demonstrating Google-style docstrings.
-    
-    Args:
-        param1: Description of first parameter.
-        param2: Description of second parameter.
-        
-    Returns:
-        Optional string result or None if processing fails.
-        
-    Raises:
-        ValueError: If param2 is negative.
-    """
-    pass
+```bash
+cd worker
+npm install
+npx playwright install chromium
+npm run check
+npm test
+npm run dev
 ```
 
-### Linting & Quality
-- **Linter**: Ruff for fast, comprehensive linting
-- **CI Standards**: Builds must fail on any warnings (post-v1 scaffolding)
-- **Type checking**: mypy for static type analysis
+Useful local verification:
 
-### Python Version
-- **Minimum**: Python 3.11+ (use latest stable features)
-- **Dependency management**: Poetry with exact version pinning
-
-## Project Structure
-
-### Current Development Structure
-```
-csgo-scraper/
-├── OddsScraper.py          # Minimal odds scraper
-├── csgocrawler.py          # Core scraping utilities  
-├── dbConnector.py          # Database connections
-├── proxyManager.py         # Proxy rotation
-├── data/                   # Local data storage
-├── docs/                   # Project documentation
-├── pyproject.toml          # Poetry configuration
-└── CLAUDE.md              # This file
+```bash
+curl http://127.0.0.1:8787/health
+npm run backfill -- --max 3
+npx wrangler d1 execute csgogamble --local --command "select status, count(*) from matches group by status;"
 ```
 
-### Target Production Structure
-```
-csgo-scraper/
-├── container/              # Python scraping container
-│   ├── Dockerfile         # Simple, single-stage build
-│   ├── requirements.txt   # Container dependencies
-│   └── src/               # Python source code
-├── worker/                # Cloudflare Worker code
-│   ├── src/               # TypeScript/JavaScript
-│   ├── wrangler.toml      # Worker configuration
-│   └── package.json       # Node dependencies
-├── database/              # D1 schema and migrations
-├── docs/                  # Service documentation
-└── .github/workflows/     # GitHub Actions
-```
+## Architecture rule
 
-## Dependency Management
+Keep acquisition separate from parsing.
 
-### Poetry Configuration
-- **Dependency groups**: Use `[tool.poetry.group.dev.dependencies]` for development tools
-- **Version pinning**: Exact versions for reproducible builds
-- **Python version**: `python = "^3.11"`
+If Cloudflare-native browser acquisition works reliably, use it.
+If HLTV still blocks it, use an external acquisition seam that returns raw HTML to the Worker.
+Do not smear scraping hacks across the whole codebase.
 
-### Example pyproject.toml structure:
-```toml
-[tool.poetry.group.dev.dependencies]
-black = "23.x.x"
-ruff = "0.x.x"
-mypy = "1.x.x"
-```
+## What not to do
 
-## Git & GitHub Workflow
-
-### Repository Management
-- **Branching**: Feature branches with descriptive names
-- **Merge strategy**: Squash merges to main branch
-- **Protection**: Minimal branch protection (hobby project flexibility)
-
-### Commit Standards
-- **Format**: Conventional commits preferred but not enforced
-- **Squash merges**: Keep main branch history clean
-
-### GitHub Actions Workflows
-- **Code Quality**: Ruff linting + mypy type checking on PRs
-- **Container Builds**: Docker image builds for container changes
-- **Cloudflare Deployment**: Automated deployment via Wrangler
-- **Dependency Security**: Dependabot for vulnerability scanning
-
-## Cloudflare Development
-
-### Local Development Setup
-- **Worker testing**: `wrangler dev` for local miniflare environment
-- **Database**: Local D1 with `wrangler d1 execute` for schema management
-- **Storage**: R2 dev bucket or local emulation for file operations
-- **Configuration**: KV local storage for development settings
-
-### Deployment Pipeline
-- **Tool**: Wrangler for all Cloudflare deployments
-- **Environments**: dev/staging/prod configurations
-- **Secrets**: GitHub Secrets → Cloudflare via GitHub Actions
-- **Configuration**: Environment-specific wrangler.toml files
-
-### Architecture Principles
-- **Edge-first**: Leverage Cloudflare's global network
-- **Serverless**: Workers for orchestration, containers for heavy processing
-- **Cost-effective**: Optimize for Cloudflare's pricing model
-- **Learning-focused**: Explore Cloudflare-native patterns
-
-## Logging & Monitoring
-
-### Logging Standards
-- **Format**: Structured JSON logging for easy parsing
-- **Levels**: DEBUG, INFO, WARN, ERROR with appropriate usage
-- **Context**: Include relevant metadata (match_id, timestamp, etc.)
-
-```python
-import logging
-import json
-from datetime import datetime
-
-logger = logging.getLogger(__name__)
-
-def log_scraping_event(match_id: str, status: str, details: dict) -> None:
-    """Log structured scraping events."""
-    log_data = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "match_id": match_id,
-        "status": status,
-        "details": details
-    }
-    logger.info(json.dumps(log_data))
-```
-
-### Error Handling
-- **Graceful degradation**: Continue processing on non-critical errors
-- **Retry logic**: Implement exponential backoff for transient failures
-- **Monitoring ready**: Structure logs for future alerting systems
+- do not revive the old Python production path
+- do not hardcode credentials or secrets anywhere
+- do not treat local scripts as the long-term orchestration layer
+- do not mix ML/training code into the Worker runtime
 
 ## Documentation
 
-### Code Documentation
-- **Docstrings**: Google format for all public functions and classes
-- **Type hints**: Comprehensive typing for self-documenting code
-- **Comments**: Explain "why" not "what" in code comments
-
-### Project Documentation
-- **Location**: `/docs/` folder for all major documentation
-- **Structure**: 
-  - `architecture.md` - System design decisions
-  - `deployment.md` - Deployment procedures
-  - `api.md` - Container API documentation
-  - `cloudflare.md` - Cloudflare service configurations
-
-### Service Documentation
-- **Decision records**: Document major architectural decisions
-- **API specs**: Clear endpoint documentation for container services
-- **Configuration guides**: Setup instructions for each Cloudflare service
-
-## Development Phases
-
-### Phase 1: Foundation (Current)
-- ✅ Single-URL scraper with clean output
-- ✅ HTML snapshot functionality
-- 🚧 Code quality tooling setup
-- 🚧 Project structure reorganization
-
-### Phase 2: Cloudflare Migration
-- [ ] Container packaging and deployment
-- [ ] Worker development and deployment
-- [ ] D1 database migration
-- [ ] R2 storage integration
-
-### Phase 3: Production Features  
-- [ ] Automated scheduling and monitoring
-- [ ] Advanced error handling and retry logic
-- [ ] Performance optimization
-- [ ] Comprehensive logging and alerting
-
-## Quality Gates
-
-### Pre-commit Requirements
-- [ ] Black formatting applied
-- [ ] Ruff linting passes
-- [ ] Type hints present on all functions
-- [ ] Docstrings on public APIs
-
-### CI/CD Requirements
-- [ ] All linting checks pass
-- [ ] Type checking passes
-- [ ] Container builds successfully
-- [ ] Worker deploys without errors
-
-## Learning Objectives
-
-This project serves as hands-on learning for:
-- **Cloudflare Workers**: Serverless compute at the edge
-- **Cloudflare D1**: Global SQLite database
-- **Cloudflare R2**: Object storage
-- **Cloudflare KV**: Key-value storage
-- **Modern Python practices**: Type hints, structured logging, containerization
-- **CI/CD pipelines**: GitHub Actions with Cloudflare integration
-
----
-
-*This document is a living guide and should be updated as the project evolves and new patterns emerge.*
+Keep these files current when architecture changes:
+- `README.md`
+- `docs/architecture.md`
+- `docs/ingestion.md`
+- `worker/README.md`

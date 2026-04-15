@@ -14,6 +14,8 @@ import { htmlStorageKey, putTextArtifact } from './storage';
 import type { DemoIngestRequest, DiscoverRequest, Env, MatchIngestRequest } from './types';
 import { nowIso } from './utils';
 
+const DEFAULT_DISCOVER_MAX_MATCHES = 20;
+
 /** Fetch, parse, and persist a single match page. */
 export async function handleIngestMatch(env: Env, request: MatchIngestRequest): Promise<Response> {
   const matchUrl = buildMatchUrl(env.HLTV_BASE_URL, request);
@@ -81,7 +83,10 @@ export async function handleDiscoverResults(env: Env, request: DiscoverRequest):
       return errorResponse('HLTV results discovery hit a Cloudflare challenge page', 503);
     }
 
-    const matchUrls = discoverMatchUrls(env.HLTV_BASE_URL, snapshot.html);
+    const matchUrls = discoverMatchUrls(env.HLTV_BASE_URL, snapshot.html).slice(
+      0,
+      request.maxMatches ?? DEFAULT_DISCOVER_MAX_MATCHES,
+    );
     await setCrawlCursor(env, 'last_results_page', pageUrl);
 
     const response: DiscoverResultsResponse = {

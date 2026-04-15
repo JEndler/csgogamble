@@ -11,6 +11,7 @@ export interface DiscoverQueueMessage {
     source?: string;
     acquisitionMode?: AcquisitionMode;
     browserSessionKey?: string;
+    maxMatches?: number;
   };
 }
 
@@ -56,6 +57,7 @@ export interface DiscoverRequest {
   html?: string;
   acquisitionMode?: AcquisitionMode;
   browserSessionKey?: string;
+  maxMatches?: number;
 }
 
 /** Input body for `/ingest/demo`. */

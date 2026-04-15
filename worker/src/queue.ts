@@ -1,8 +1,11 @@
 import { handleRequest } from './app';
 import type { DiscoverResultsResponse, ErrorResponse, IngestMatchResponse } from './contracts';
+import { releaseCrawlLock, tryAcquireCrawlLock } from './db';
 import type { AcquisitionMode, DiscoverQueueMessage, Env, IngestMatchQueueMessage, WorkerQueueMessage } from './types';
 
 const INTERNAL_BASE_URL = 'https://internal.csgogamble-worker';
+const SCHEDULED_DISCOVER_LOCK_KEY = 'scheduled_discovery_lock';
+const SCHEDULED_DISCOVER_LOCK_TTL_MS = 10 * 60 * 1_000;
 
 type QueueDispatchResult = DiscoverResultsResponse | IngestMatchResponse;
 
@@ -64,6 +67,7 @@ export function createDiscoverResultsMessage(payload: DiscoverQueueMessage['payl
       source: payload.source,
       acquisitionMode: payload.acquisitionMode,
       browserSessionKey: payload.browserSessionKey,
+      maxMatches: payload.maxMatches,
     },
   };
 }
@@ -114,6 +118,7 @@ export function parseQueueMessage(payload: unknown): WorkerQueueMessage {
       source: readOptionalString(payload.payload.source),
       acquisitionMode: readOptionalAcquisitionMode(payload.payload.acquisitionMode),
       browserSessionKey: readOptionalString(payload.payload.browserSessionKey),
+      maxMatches: readOptionalNumber(payload.payload.maxMatches),
     });
 
     if (
@@ -177,28 +182,45 @@ export async function enqueueMessages(env: Env, messages: readonly WorkerQueueMe
 }
 
 async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): Promise<void> {
-  const response = await invokeEndpoint<DiscoverResultsResponse>(env, '/discover/results', {
-    pageUrl: message.payload.pageUrl,
-    html: message.payload.html,
-    acquisitionMode: message.payload.acquisitionMode,
-    browserSessionKey: message.payload.browserSessionKey,
-  });
+  const isScheduledRun = message.payload.source?.startsWith('cron:') ?? false;
+  const lockToken = isScheduledRun ? `${message.payload.browserSessionKey ?? 'cron'}:${Date.now()}` : null;
+  const lockAcquired = lockToken
+    ? await tryAcquireCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, lockToken, SCHEDULED_DISCOVER_LOCK_TTL_MS)
+    : true;
 
-  const ingestMessages = buildIngestMatchMessages(response.matchUrls, {
-    persistHtml: message.payload.persistHtml,
-    source: message.payload.source,
-    acquisitionMode: message.payload.acquisitionMode,
-    browserSessionKey: message.payload.browserSessionKey,
-  });
-
-  if (message.payload.acquisitionMode === 'browser-session' && message.payload.browserSessionKey) {
-    for (const ingestMessage of ingestMessages) {
-      await processIngestMessage(env, ingestMessage);
-    }
+  if (!lockAcquired) {
     return;
   }
 
-  await enqueueMessages(env, ingestMessages);
+  try {
+    const response = await invokeEndpoint<DiscoverResultsResponse>(env, '/discover/results', {
+      pageUrl: message.payload.pageUrl,
+      html: message.payload.html,
+      acquisitionMode: message.payload.acquisitionMode,
+      browserSessionKey: message.payload.browserSessionKey,
+      maxMatches: message.payload.maxMatches,
+    });
+
+    const ingestMessages = buildIngestMatchMessages(response.matchUrls, {
+      persistHtml: message.payload.persistHtml,
+      source: message.payload.source,
+      acquisitionMode: message.payload.acquisitionMode,
+      browserSessionKey: message.payload.browserSessionKey,
+    });
+
+    if (message.payload.acquisitionMode === 'browser-session' && message.payload.browserSessionKey) {
+      for (const ingestMessage of ingestMessages) {
+        await processIngestMessage(env, ingestMessage);
+      }
+      return;
+    }
+
+    await enqueueMessages(env, ingestMessages);
+  } finally {
+    if (lockToken) {
+      await releaseCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, lockToken);
+    }
+  }
 }
 
 async function processIngestMessage(env: Env, message: IngestMatchQueueMessage): Promise<void> {

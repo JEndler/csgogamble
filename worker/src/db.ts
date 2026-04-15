@@ -225,6 +225,34 @@ export async function setCrawlCursor(env: Env, key: string, value: string): Prom
     .run();
 }
 
+export async function tryAcquireCrawlLock(env: Env, key: string, token: string, ttlMs: number): Promise<boolean> {
+  const nowMs = Date.now();
+  const lockValue = JSON.stringify({ token, expiresAtMs: nowMs + ttlMs });
+  const result = await env.DB.prepare(
+    `INSERT INTO crawl_state (key, value, updated_at)
+       VALUES (?1, ?2, ?3)
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value,
+         updated_at = excluded.updated_at
+       WHERE json_extract(crawl_state.value, '$.expiresAtMs') IS NULL
+         OR CAST(json_extract(crawl_state.value, '$.expiresAtMs') AS INTEGER) < ?4`,
+  )
+    .bind(key, lockValue, nowIso(), nowMs)
+    .run();
+
+  return Boolean(result.meta.changed_db);
+}
+
+export async function releaseCrawlLock(env: Env, key: string, token: string): Promise<void> {
+  await env.DB.prepare(
+    `DELETE FROM crawl_state
+      WHERE key = ?1
+        AND json_extract(value, '$.token') = ?2`,
+  )
+    .bind(key, token)
+    .run();
+}
+
 /** Persist demo artifact metadata after the actual file has been uploaded to R2. */
 export async function recordDemoArtifact(
   env: Env,

@@ -61,6 +61,10 @@ function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function readOptionalPositiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function readOptionalBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
@@ -102,6 +106,7 @@ export function parseDiscoverRequest(payload: unknown): DiscoverRequest {
     html: readOptionalString(payload.html),
     acquisitionMode: readOptionalAcquisitionMode(payload.acquisitionMode),
     browserSessionKey: readOptionalString(payload.browserSessionKey),
+    maxMatches: readOptionalPositiveInteger(payload.maxMatches),
   };
 }
 

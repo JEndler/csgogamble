@@ -7,6 +7,7 @@ export async function enqueueScheduledDiscovery(env: Env, controller: ScheduledC
       source: `cron:${controller.cron}`,
       acquisitionMode: 'browser-session',
       browserSessionKey: `cron-${controller.scheduledTime}`,
+      maxMatches: 20,
     }),
   ]);
 }

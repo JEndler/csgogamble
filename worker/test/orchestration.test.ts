@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handleRequestMock } = vi.hoisted(() => ({
+const { handleRequestMock, tryAcquireCrawlLockMock, releaseCrawlLockMock } = vi.hoisted(() => ({
   handleRequestMock: vi.fn(),
+  tryAcquireCrawlLockMock: vi.fn(),
+  releaseCrawlLockMock: vi.fn(),
 }));
 
 vi.mock('../src/app', () => ({
   handleRequest: handleRequestMock,
+}));
+
+vi.mock('../src/db', () => ({
+  tryAcquireCrawlLock: tryAcquireCrawlLockMock,
+  releaseCrawlLock: releaseCrawlLockMock,
 }));
 
 import {
@@ -38,6 +45,10 @@ function createBatch(messages: WorkerQueueMessage[]): MessageBatch<unknown> {
 describe('queue orchestration helpers', () => {
   beforeEach(() => {
     handleRequestMock.mockReset();
+    tryAcquireCrawlLockMock.mockReset();
+    releaseCrawlLockMock.mockReset();
+    tryAcquireCrawlLockMock.mockResolvedValue(true);
+    releaseCrawlLockMock.mockResolvedValue(undefined);
   });
 
   it('creates and parses a discover-results queue message', () => {
@@ -47,6 +58,7 @@ describe('queue orchestration helpers', () => {
       source: 'scheduled',
       acquisitionMode: 'browser-session',
       browserSessionKey: 'cron-batch-1',
+      maxMatches: 20,
     });
 
     expect(parseQueueMessage(message)).toEqual(message);
@@ -103,6 +115,7 @@ describe('queue orchestration helpers', () => {
         acquisitionMode: 'browser-session',
         browserSessionKey: 'cron-123',
         source: 'cron:test',
+        maxMatches: 2,
       }),
     ]);
 
@@ -111,7 +124,18 @@ describe('queue orchestration helpers', () => {
     } as unknown as Env);
 
     expect(sendBatch).not.toHaveBeenCalled();
+    expect(tryAcquireCrawlLockMock).toHaveBeenCalledTimes(1);
+    expect(releaseCrawlLockMock).toHaveBeenCalledTimes(1);
     expect(handleRequestMock).toHaveBeenCalledTimes(3);
+
+    const discoverBody = JSON.parse(await (handleRequestMock.mock.calls[0]?.[0] as Request).text());
+    expect(discoverBody).toEqual(
+      expect.objectContaining({
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-123',
+        maxMatches: 2,
+      }),
+    );
 
     const ingestBodies = await Promise.all(
       handleRequestMock.mock.calls.slice(1).map(async ([request]) => JSON.parse(await (request as Request).text())),
@@ -154,6 +178,27 @@ describe('queue orchestration helpers', () => {
 
     expect(sendBatch).toHaveBeenCalledTimes(1);
     expect(handleRequestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a scheduled discovery batch when another scheduled batch still holds the lock', async () => {
+    tryAcquireCrawlLockMock.mockResolvedValueOnce(false);
+
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-locked',
+        source: 'cron:test',
+        maxMatches: 20,
+      }),
+    ]);
+
+    await processQueueBatch(batch, {
+      INGESTION_QUEUE: { sendBatch: vi.fn() },
+    } as unknown as Env);
+
+    expect(handleRequestMock).not.toHaveBeenCalled();
+    expect(releaseCrawlLockMock).not.toHaveBeenCalled();
+    expect((batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn> }).ack).toHaveBeenCalledTimes(1);
   });
 
   it('rejects malformed queue messages', () => {

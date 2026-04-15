@@ -253,6 +253,35 @@ export async function releaseCrawlLock(env: Env, key: string, token: string): Pr
     .run();
 }
 
+export async function createIngestRun(
+  env: Env,
+  scope: string,
+  target: string | null,
+  status: string,
+  message: string | null,
+): Promise<number> {
+  const result = await env.DB.prepare(
+    `INSERT INTO ingest_runs (scope, target, status, message)
+       VALUES (?1, ?2, ?3, ?4)`,
+  )
+    .bind(scope, target, status, message)
+    .run();
+
+  return Number(result.meta.last_row_id ?? 0);
+}
+
+export async function finishIngestRun(env: Env, id: number, status: string, message: string | null): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE ingest_runs
+        SET status = ?2,
+            message = ?3,
+            finished_at = ?4
+      WHERE id = ?1`,
+  )
+    .bind(id, status, message, nowIso())
+    .run();
+}
+
 /** Persist demo artifact metadata after the actual file has been uploaded to R2. */
 export async function recordDemoArtifact(
   env: Env,

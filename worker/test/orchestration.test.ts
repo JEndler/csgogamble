@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handleRequestMock, tryAcquireCrawlLockMock, releaseCrawlLockMock } = vi.hoisted(() => ({
-  handleRequestMock: vi.fn(),
-  tryAcquireCrawlLockMock: vi.fn(),
-  releaseCrawlLockMock: vi.fn(),
-}));
+const { handleRequestMock, tryAcquireCrawlLockMock, releaseCrawlLockMock, createIngestRunMock, finishIngestRunMock } =
+  vi.hoisted(() => ({
+    handleRequestMock: vi.fn(),
+    tryAcquireCrawlLockMock: vi.fn(),
+    releaseCrawlLockMock: vi.fn(),
+    createIngestRunMock: vi.fn(),
+    finishIngestRunMock: vi.fn(),
+  }));
 
 vi.mock('../src/app', () => ({
   handleRequest: handleRequestMock,
@@ -13,6 +16,8 @@ vi.mock('../src/app', () => ({
 vi.mock('../src/db', () => ({
   tryAcquireCrawlLock: tryAcquireCrawlLockMock,
   releaseCrawlLock: releaseCrawlLockMock,
+  createIngestRun: createIngestRunMock,
+  finishIngestRun: finishIngestRunMock,
 }));
 
 import {
@@ -47,8 +52,12 @@ describe('queue orchestration helpers', () => {
     handleRequestMock.mockReset();
     tryAcquireCrawlLockMock.mockReset();
     releaseCrawlLockMock.mockReset();
+    createIngestRunMock.mockReset();
+    finishIngestRunMock.mockReset();
     tryAcquireCrawlLockMock.mockResolvedValue(true);
     releaseCrawlLockMock.mockResolvedValue(undefined);
+    createIngestRunMock.mockResolvedValue(101);
+    finishIngestRunMock.mockResolvedValue(undefined);
   });
 
   it('creates and parses a discover-results queue message', () => {
@@ -125,7 +134,20 @@ describe('queue orchestration helpers', () => {
 
     expect(sendBatch).not.toHaveBeenCalled();
     expect(tryAcquireCrawlLockMock).toHaveBeenCalledTimes(1);
+    expect(createIngestRunMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'scheduled-discovery',
+      'cron-123',
+      'running',
+      'Starting scheduled discovery with maxMatches=2',
+    );
     expect(releaseCrawlLockMock).toHaveBeenCalledTimes(1);
+    expect(finishIngestRunMock).toHaveBeenCalledWith(
+      expect.anything(),
+      101,
+      'success',
+      'Discovered 2 matches; ingested 2 inline via shared browser session',
+    );
     expect(handleRequestMock).toHaveBeenCalledTimes(3);
 
     const discoverBody = JSON.parse(await (handleRequestMock.mock.calls[0]?.[0] as Request).text());
@@ -196,6 +218,13 @@ describe('queue orchestration helpers', () => {
       INGESTION_QUEUE: { sendBatch: vi.fn() },
     } as unknown as Env);
 
+    expect(createIngestRunMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'scheduled-discovery',
+      'cron-locked',
+      'skipped',
+      'Skipped because another scheduled discovery batch still holds the crawl lock',
+    );
     expect(handleRequestMock).not.toHaveBeenCalled();
     expect(releaseCrawlLockMock).not.toHaveBeenCalled();
     expect((batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn> }).ack).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 import { handleRequest } from './app';
 import type { DiscoverResultsResponse, ErrorResponse, IngestMatchResponse } from './contracts';
-import { releaseCrawlLock, tryAcquireCrawlLock } from './db';
+import { createIngestRun, finishIngestRun, releaseCrawlLock, tryAcquireCrawlLock } from './db';
 import type { AcquisitionMode, DiscoverQueueMessage, Env, IngestMatchQueueMessage, WorkerQueueMessage } from './types';
 
 const INTERNAL_BASE_URL = 'https://internal.csgogamble-worker';
@@ -183,14 +183,34 @@ export async function enqueueMessages(env: Env, messages: readonly WorkerQueueMe
 
 async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): Promise<void> {
   const isScheduledRun = message.payload.source?.startsWith('cron:') ?? false;
+  const runTarget = message.payload.browserSessionKey ?? message.payload.pageUrl ?? null;
   const lockToken = isScheduledRun ? `${message.payload.browserSessionKey ?? 'cron'}:${Date.now()}` : null;
   const lockAcquired = lockToken
     ? await tryAcquireCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, lockToken, SCHEDULED_DISCOVER_LOCK_TTL_MS)
     : true;
 
   if (!lockAcquired) {
+    if (isScheduledRun) {
+      await createIngestRun(
+        env,
+        'scheduled-discovery',
+        runTarget,
+        'skipped',
+        'Skipped because another scheduled discovery batch still holds the crawl lock',
+      );
+    }
     return;
   }
+
+  const runId = isScheduledRun
+    ? await createIngestRun(
+        env,
+        'scheduled-discovery',
+        runTarget,
+        'running',
+        `Starting scheduled discovery with maxMatches=${message.payload.maxMatches ?? 'default'}`,
+      )
+    : 0;
 
   try {
     const response = await invokeEndpoint<DiscoverResultsResponse>(env, '/discover/results', {
@@ -209,13 +229,37 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
     });
 
     if (message.payload.acquisitionMode === 'browser-session' && message.payload.browserSessionKey) {
+      let successCount = 0;
       for (const ingestMessage of ingestMessages) {
         await processIngestMessage(env, ingestMessage);
+        successCount += 1;
+      }
+      if (runId) {
+        await finishIngestRun(
+          env,
+          runId,
+          'success',
+          `Discovered ${response.discovered} matches; ingested ${successCount} inline via shared browser session`,
+        );
       }
       return;
     }
 
     await enqueueMessages(env, ingestMessages);
+    if (runId) {
+      await finishIngestRun(
+        env,
+        runId,
+        'success',
+        `Discovered ${response.discovered} matches; enqueued ${ingestMessages.length} ingest jobs`,
+      );
+    }
+  } catch (error) {
+    if (runId) {
+      const messageText = error instanceof Error ? error.message : String(error);
+      await finishIngestRun(env, runId, 'error', messageText);
+    }
+    throw error;
   } finally {
     if (lockToken) {
       await releaseCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, lockToken);

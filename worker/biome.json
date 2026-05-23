@@ -6,7 +6,15 @@
     "useIgnoreFile": false
   },
   "files": {
-    "includes": ["**", "!.wrangler", "!worker-configuration.d.ts"]
+    "includes": [
+      "**",
+      "!.wrangler",
+      "!node_modules",
+      "!coverage",
+      "!dist",
+      "!worker-configuration.d.ts",
+      "!migrations/**/*.sql"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -17,13 +25,64 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "a11y": {
+        "recommended": true
+      },
+      "complexity": {
+        "recommended": true,
+        "noExcessiveCognitiveComplexity": "warn",
+        "noExcessiveLinesPerFunction": "warn",
+        "noForEach": "error",
+        "useArrowFunction": "error",
+        "useOptionalChain": "error"
+      },
+      "correctness": {
+        "recommended": true
+      },
+      "nursery": {
+        "recommended": true,
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "noUnnecessaryConditions": "warn",
+        "useExplicitReturnType": "warn",
+        "useExhaustiveSwitchCases": "error"
+      },
+      "performance": {
+        "recommended": true,
+        "noAccumulatingSpread": "error",
+        "noAwaitInLoops": "warn"
+      },
+      "security": {
+        "recommended": true,
+        "noGlobalEval": "error",
+        "noSecrets": "warn"
+      },
+      "style": {
+        "recommended": true,
+        "noDefaultExport": "off",
+        "noNonNullAssertion": "error",
+        "useConst": "error",
+        "useTemplate": "error"
+      },
+      "suspicious": {
+        "recommended": true,
+        "noConsole": "off",
+        "noExplicitAny": "error"
+      }
     }
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
-      "trailingCommas": "all"
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
     }
   },
   "assist": {

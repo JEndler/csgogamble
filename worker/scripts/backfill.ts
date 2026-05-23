@@ -16,6 +16,7 @@
  *   npm run backfill -- --worker-url http://localhost:8787
  */
 
+import type { Browser, Page } from 'playwright';
 import { discoverMatchUrls } from '../src/hltv';
 import { launchBrowser } from './browser';
 
@@ -24,25 +25,34 @@ const DEFAULT_WORKER_URL = 'http://localhost:8787';
 const DEFAULT_MAX = 100;
 const PAGE_DELAY_MS = 1000;
 const MATCH_DELAY_MS = 1000;
+const DEFAULT_INGEST_TIMEOUT_MS = 60_000;
 
 interface BackfillOptions {
   max: number;
+  startOffset: number;
   workerUrl: string;
   headless: boolean;
+  ingestTimeoutMs: number;
 }
 
 function parseArgs(): BackfillOptions {
   const args = process.argv.slice(2);
   const opts: BackfillOptions = {
     max: DEFAULT_MAX,
+    startOffset: 0,
     workerUrl: DEFAULT_WORKER_URL,
     headless: true,
+    ingestTimeoutMs: DEFAULT_INGEST_TIMEOUT_MS,
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--max' && args[i + 1]) {
       opts.max = Number.parseInt(args[++i], 10);
+    } else if (arg === '--start-offset' && args[i + 1]) {
+      opts.startOffset = Number.parseInt(args[++i], 10);
+    } else if (arg === '--ingest-timeout-ms' && args[i + 1]) {
+      opts.ingestTimeoutMs = Number.parseInt(args[++i], 10);
     } else if (arg === '--worker-url' && args[i + 1]) {
       opts.workerUrl = args[++i];
     } else if (arg === '--headed') {
@@ -53,16 +63,42 @@ function parseArgs(): BackfillOptions {
   return opts;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function closeBrowserQuietly(browser: Browser): Promise<void> {
+  try {
+    await browser.close();
+  } catch (err) {
+    console.warn(`Browser close warning: ${err}`);
+  }
+}
+
+async function relaunchBrowser(browser: Browser, headless: boolean): Promise<{ browser: Browser; page: Page }> {
+  await closeBrowserQuietly(browser);
+  return launchBrowser({ headless });
+}
+
+function isClosedBrowserError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes('Target page, context or browser has been closed') || message.includes('browser has been closed')
+  );
+}
+
 async function main(): Promise<void> {
   const opts = parseArgs();
-  console.log(`Backfill: max=${opts.max}, worker=${opts.workerUrl}, headless=${opts.headless}\n`);
+  console.log(
+    `Backfill: max=${opts.max}, startOffset=${opts.startOffset}, worker=${opts.workerUrl}, headless=${opts.headless}\n`,
+  );
 
-  const { browser, page } = await launchBrowser({ headless: opts.headless });
+  let { browser, page } = await launchBrowser({ headless: opts.headless });
 
   try {
     // Phase 1: discover match URLs from /results pages
     const collected = new Set<string>();
-    let offset = 0;
+    let offset = opts.startOffset;
 
     while (collected.size < opts.max) {
       const url = offset === 0 ? `${HLTV_BASE}/results` : `${HLTV_BASE}/results?offset=${offset}`;
@@ -97,9 +133,17 @@ async function main(): Promise<void> {
     // Phase 2: visit each match and POST its HTML to the worker
     let success = 0;
     let failed = 0;
+    const RESTART_EVERY = 10;
 
     for (let i = 0; i < matchUrls.length; i++) {
       const matchUrl = matchUrls[i];
+
+      // Restart browser periodically to avoid session instability
+      if (i > 0 && i % RESTART_EVERY === 0) {
+        console.log(`Restarting browser after ${i} matches...`);
+        ({ browser, page } = await relaunchBrowser(browser, opts.headless));
+      }
+
       try {
         await page.goto(matchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
         await page.waitForTimeout(PAGE_DELAY_MS);
@@ -109,6 +153,7 @@ async function main(): Promise<void> {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ matchUrl, html: matchHtml }),
+          signal: AbortSignal.timeout(opts.ingestTimeoutMs),
         });
 
         const result = (await resp.json()) as { ok: boolean; error?: string };
@@ -119,16 +164,20 @@ async function main(): Promise<void> {
       } catch (err) {
         failed++;
         console.error(`[${i + 1}/${matchUrls.length}] FAIL ${matchUrl}: ${err}`);
+        if (isClosedBrowserError(err)) {
+          console.log('Browser/page closed unexpectedly; relaunching and continuing...');
+          ({ browser, page } = await relaunchBrowser(browser, opts.headless));
+        }
       }
 
       if (i < matchUrls.length - 1) {
-        await page.waitForTimeout(MATCH_DELAY_MS);
+        await sleep(MATCH_DELAY_MS);
       }
     }
 
     console.log(`\nBackfill complete: ${success} succeeded, ${failed} failed out of ${matchUrls.length}`);
   } finally {
-    await browser.close();
+    await closeBrowserQuietly(browser);
   }
 }
 

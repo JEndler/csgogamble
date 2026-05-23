@@ -49,7 +49,14 @@ export async function launchBrowser(opts: LaunchOptions = {}): Promise<BrowserHa
     stealthRegistered = true;
   }
 
-  const browser = await chromium.launch({ headless });
+  const launchOptions: Record<string, unknown> = { headless };
+  // Use system Chromium on Ubuntu 26.04 where `playwright install` fails
+  const execPath = process.env.CHROMIUM_PATH || '/snap/bin/chromium';
+  if (execPath) {
+    launchOptions.executablePath = execPath;
+  }
+
+  const browser = await chromium.launch(launchOptions);
   const context = await browser.newContext({
     userAgent: DEFAULT_USER_AGENT,
     ...(downloads && { acceptDownloads: true }),

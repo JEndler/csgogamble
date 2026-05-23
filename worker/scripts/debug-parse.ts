@@ -1,5 +1,5 @@
 /**
- * Debug helper: fetch a single match URL and print the parsed maps array.
+ * Debug helper: fetch a single match URL and print the full parsed payload.
  *
  * Usage:
  *   npx tsx scripts/debug-parse.ts <match-url>
@@ -16,5 +16,5 @@ await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 await page.waitForTimeout(3000);
 const html = await page.content();
 const parsed = parseMatchHtml(url, html);
-console.log(JSON.stringify(parsed.maps, null, 2));
+console.log(JSON.stringify(parsed, null, 2));
 await browser.close();

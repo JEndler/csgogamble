@@ -1,98 +1,89 @@
-# csgogamble - Development Guide
+# csgogamble Agent Guide
 
-This repo is now Worker-first and TypeScript-first.
+## Mission
 
-## Project direction
+Build a Cloudflare-native CS2 match ingestion, feature-generation, and betting research platform. The business goal is to ingest rich HLTV match data, combine it with market data, model win probabilities, and eventually identify profitable Polymarket/Kalshi-style opportunities.
 
-`worker/` is the canonical application.
-
-The goal is to build a Cloudflare-centric ingestion platform for HLTV match data:
-- scheduled discovery
-- queued ingestion
-- acquisition of raw HTML
-- parsing into normalized match/map/player data
-- D1 as the operational store
-- R2 as the raw artifact store
-
-Legacy Python code lives under `archive/python-legacy/` for reference only. Do not build new production code there.
-
-## Current priorities
-
-1. Make scheduled ingestion run reliably on Cloudflare.
-2. Keep the parsing/persistence layer clean and strongly typed.
-3. Preserve raw HTML for debugging and parser iteration.
-4. Build a sane foundation for later ML and live prediction work.
-
-## Standards
-
-### TypeScript
-- strict typing
-- no `any` unless there is a very good reason
-- small, boring modules over giant files
-- prefer explicit request/response contracts
-- document parser assumptions when HTML is brittle
-
-### Formatting and linting
-- formatter: Biome
-- linting: Biome
-- typecheck: `tsc --noEmit`
-- tests: Vitest
-
-### Cloudflare
-- use Wrangler for local development and deploys
-- D1 migrations live in `worker/migrations/`
-- R2 is for raw HTML and later large artifacts
-- Cron Triggers should drive recurring jobs
-- Queues should decouple discovery from ingest work
-
-## Repo structure
+## Architecture
 
 ```text
-csgogamble/
-├── worker/                  # production app
-├── docs/                    # architecture and plans
-├── archive/python-legacy/   # historical Python code only
-└── README.md
+HLTV / market sources
+  -> Cloudflare Worker scheduled discovery
+  -> Cloudflare Queue messages per match / market
+  -> Cloudflare Browser Rendering acquisition
+  -> parser / normalizer
+  -> D1 operational + normalized relational storage
+  -> R2 raw artifacts for replay/reparse
+  -> downstream feature generation / modeling / betting automation
 ```
 
-## Worker workflow
+Primary application:
+
+- `worker/` — TypeScript Cloudflare Worker, API handlers, scheduled jobs, queues, D1 persistence, R2 artifact storage, parsers, scripts, tests, and migrations.
+
+Important Worker modules:
+
+- `worker/src/handlers.ts` — HTTP routes, scheduled entrypoints, queue consumers, ingest orchestration.
+- `worker/src/hltv.ts` — HLTV HTML parsing and match URL discovery. Parsing must be deterministic and covered by tests.
+- `worker/src/db.ts` — D1 persistence. Keep schema writes idempotent and migration-compatible.
+- `worker/src/types.ts` — shared parser/persistence types.
+- `worker/migrations/` — forward-only D1 migrations. Never edit an applied migration; add a new one.
+- `worker/test/` — Vitest coverage for parsing, orchestration, and browser-session behavior.
+- `worker/scripts/` — operational scripts. These may inspect local files/D1, but must not scrape protected sources locally unless explicitly allowed by the user.
+
+Data stores:
+
+- D1: normalized state and queryable match data.
+- R2: raw HTML and future heavy artifacts. Raw artifacts are sacred because they let us reparse historical data after parser improvements.
+- Queues: ingestion work distribution.
+- Browser Rendering: acquisition runtime for protected pages.
+
+## Non-negotiable operating rules
+
+1. Never parse/acquire HLTV from local machine by default.
+   - Use deployed Workers / Cloudflare-native acquisition.
+   - Local execution is fine for tests, parser replay against stored artifacts, D1 analysis, migrations, typechecks, and debugging.
+   - Do not run local browser scraping against HLTV or Polymarket unless Jakob explicitly asks for it for that run.
+
+2. Commit liberally once a coherent body of work is done.
+   - Act like the repo owner.
+   - Keep commits reviewable and conventional.
+   - Do not leave finished work uncommitted.
+
+3. Document work thoroughly.
+   - Update this file, README, docs, migrations, comments, or operational notes when behavior changes.
+   - Mention production commands and verification results in commit messages when useful.
+
+4. Prefer tests first for parser and persistence work.
+   - Add or update fixtures/tests before changing parser behavior.
+   - Parser regressions are expensive because they corrupt data silently.
+
+5. Protect secrets.
+   - Never print or commit `.dev.vars`, API tokens, account IDs where avoidable, cookies, or credentials.
+   - `worker/.dev.vars` is intentionally ignored.
+
+6. Separate acquisition from parsing.
+   - Acquisition gets raw HTML/artifacts.
+   - Parsing turns artifacts into typed normalized records.
+   - Persistence writes idempotently to D1.
+
+## Quality gates
+
+Run from `worker/` before committing code changes:
 
 ```bash
-cd worker
-npm install
-npx playwright install chromium
 npm run check
 npm test
-npm run dev
+npm run duplicate-check
 ```
 
-Useful local verification:
+`npm run check` includes TypeScript and Biome. Biome is intentionally strict. Fix warnings instead of weakening rules unless there is a strong documented reason.
 
-```bash
-curl http://127.0.0.1:8787/health
-npm run backfill -- --max 3
-npx wrangler d1 execute csgogamble --local --command "select status, count(*) from matches group by status;"
-```
+## Current production posture
 
-## Architecture rule
+The parser is production-usable and stores richer match metadata, maps, vetoes, lineups, streams, and player stats. Acquisition remains the highest-risk system boundary because protected sources can challenge or close browser sessions.
 
-Keep acquisition separate from parsing.
+When evaluating ingestion health, check both:
 
-If Cloudflare-native browser acquisition works reliably, use it.
-If HLTV still blocks it, use an external acquisition seam that returns raw HTML to the Worker.
-Do not smear scraping hacks across the whole codebase.
-
-## What not to do
-
-- do not revive the old Python production path
-- do not hardcode credentials or secrets anywhere
-- do not treat local scripts as the long-term orchestration layer
-- do not mix ML/training code into the Worker runtime
-
-## Documentation
-
-Keep these files current when architecture changes:
-- `README.md`
-- `docs/architecture.md`
-- `docs/ingestion.md`
-- `worker/README.md`
+- code health: `npm run check`, `npm test`, `npm run duplicate-check`
+- live data health: D1 status counts, latest ingest timestamp, partial/challenge/error ratios, and enriched child-table coverage

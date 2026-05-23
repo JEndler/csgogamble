@@ -7,6 +7,8 @@ worker/node_modules/
 # Cloudflare local state
 .wrangler/
 worker/.wrangler/
+worker/.dev.vars
+*.dev.vars
 
 # Python
 __pycache__/

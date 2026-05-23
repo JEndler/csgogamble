@@ -1,5 +1,15 @@
 import { PARSER_VERSION } from './constants';
-import type { Env, ParsedMatch, ParsedPlayerStat, PersistedArtifactResult, TeamSummary } from './types';
+import type {
+  Env,
+  ParsedLineupPlayer,
+  ParsedMatch,
+  ParsedPlayerMatchStat,
+  ParsedPlayerStat,
+  ParsedStream,
+  ParsedVeto,
+  PersistedArtifactResult,
+  TeamSummary,
+} from './types';
 import { nowIso } from './utils';
 
 function buildUpsertTeamStatement(db: D1Database, team: TeamSummary, timestamp: string): D1PreparedStatement | null {
@@ -24,18 +34,37 @@ function buildUpsertMatchStatement(
   htmlR2Key: string | null,
   timestamp: string,
 ): D1PreparedStatement {
+  const parseWarnings = parsed.parseWarnings.length > 0 ? JSON.stringify(parsed.parseWarnings) : null;
+
   return db
     .prepare(
       `INSERT INTO matches (
-        hltv_match_id, slug, source_url, event_name, best_of, scheduled_at,
+        hltv_match_id, slug, source_url, event_name, event_hltv_id, event_source_url,
+        match_stage, match_format, match_location, match_status,
+        best_of, scheduled_at,
         winner_team_id, team1_hltv_id, team2_hltv_id, team1_name, team2_name,
-        team1_score, team2_score, status, html_r2_key, raw_demo_url, parser_version,
+        team1_score, team2_score, team1_rank, team2_rank,
+        status, html_r2_key, raw_demo_url, parser_version, parse_warnings,
         last_ingested_at, ingest_error
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL)
+      ) VALUES (
+        ?1, ?2, ?3, ?4, ?5, ?6,
+        ?7, ?8, ?9, ?10,
+        ?11, ?12,
+        ?13, ?14, ?15, ?16, ?17,
+        ?18, ?19, ?20, ?21,
+        ?22, ?23, ?24, ?25, ?26,
+        ?27, NULL
+      )
       ON CONFLICT(hltv_match_id) DO UPDATE SET
         slug = excluded.slug,
         source_url = excluded.source_url,
         event_name = excluded.event_name,
+        event_hltv_id = excluded.event_hltv_id,
+        event_source_url = excluded.event_source_url,
+        match_stage = excluded.match_stage,
+        match_format = excluded.match_format,
+        match_location = excluded.match_location,
+        match_status = excluded.match_status,
         best_of = excluded.best_of,
         scheduled_at = excluded.scheduled_at,
         winner_team_id = excluded.winner_team_id,
@@ -45,10 +74,13 @@ function buildUpsertMatchStatement(
         team2_name = excluded.team2_name,
         team1_score = excluded.team1_score,
         team2_score = excluded.team2_score,
+        team1_rank = excluded.team1_rank,
+        team2_rank = excluded.team2_rank,
         status = excluded.status,
         html_r2_key = COALESCE(excluded.html_r2_key, matches.html_r2_key),
         raw_demo_url = excluded.raw_demo_url,
         parser_version = excluded.parser_version,
+        parse_warnings = excluded.parse_warnings,
         last_ingested_at = excluded.last_ingested_at,
         ingest_error = NULL`,
     )
@@ -57,6 +89,12 @@ function buildUpsertMatchStatement(
       parsed.slug,
       parsed.sourceUrl,
       parsed.eventName,
+      parsed.eventHltvId,
+      parsed.eventSourceUrl,
+      parsed.matchStage,
+      parsed.matchFormat,
+      parsed.matchLocation,
+      parsed.matchStatus,
       parsed.bestOf,
       parsed.scheduledAt,
       parsed.winnerTeamId,
@@ -66,10 +104,13 @@ function buildUpsertMatchStatement(
       parsed.team2.name,
       parsed.team1Score,
       parsed.team2Score,
+      parsed.team1.rank,
+      parsed.team2.rank,
       parsed.status,
       htmlR2Key,
       parsed.rawDemoUrl,
       parsed.parserVersion,
+      parseWarnings,
       timestamp,
     );
 }
@@ -83,10 +124,27 @@ function buildMapStatements(db: D1Database, parsed: ParsedMatch): D1PreparedStat
     statements.push(
       db
         .prepare(
-          `INSERT INTO maps (match_hltv_id, hltv_map_id, map_name, source_url, team1_score, team2_score)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+          `INSERT INTO maps (
+            match_hltv_id, hltv_map_id, map_name, source_url, team1_score, team2_score,
+            map_order, map_status, pick_team_hltv_id, winner_team_hltv_id,
+            team1_half_scores, team2_half_scores, performance_url
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
         )
-        .bind(parsed.hltvMatchId, map.hltvMapId, map.mapName, map.sourceUrl, map.team1Score, map.team2Score),
+        .bind(
+          parsed.hltvMatchId,
+          map.hltvMapId,
+          map.mapName,
+          map.sourceUrl,
+          map.team1Score,
+          map.team2Score,
+          map.order,
+          map.status,
+          map.pickTeamHltvId,
+          map.winnerTeamHltvId,
+          map.team1HalfScores.length > 0 ? JSON.stringify(map.team1HalfScores) : null,
+          map.team2HalfScores.length > 0 ? JSON.stringify(map.team2HalfScores) : null,
+          map.performanceUrl,
+        ),
     );
   }
 
@@ -127,8 +185,10 @@ function buildPlayerMapStatStatement(
     .prepare(
       `INSERT INTO player_map_stats (
         match_hltv_id, map_name, player_hltv_id, team_hltv_id,
-        kills, deaths, adr, rating, kast, source_url, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+        kills, deaths, kd_diff, first_kill_diff,
+        adr, rating, rating_version, kast,
+        source_url, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
     )
     .bind(
       matchHltvId,
@@ -137,12 +197,146 @@ function buildPlayerMapStatStatement(
       stat.teamHltvId,
       stat.kills,
       stat.deaths,
+      stat.kdDiff,
+      stat.firstKillDiff,
       stat.adr,
       stat.rating,
+      stat.ratingVersion,
       stat.kast,
       stat.sourceUrl,
       timestamp,
     );
+}
+
+function buildPlayerMatchStatStatements(
+  db: D1Database,
+  matchHltvId: number,
+  stats: ParsedPlayerMatchStat[],
+  timestamp: string,
+): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM player_match_stats WHERE match_hltv_id = ?1').bind(matchHltvId),
+  ];
+
+  for (const stat of stats) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO players (hltv_player_id, nickname, updated_at)
+           VALUES (?1, ?2, ?3)
+           ON CONFLICT(hltv_player_id) DO UPDATE SET
+             nickname = excluded.nickname,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(stat.playerHltvId, stat.nickname, timestamp),
+    );
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO player_match_stats (
+            match_hltv_id, player_hltv_id, team_hltv_id,
+            kills, deaths, kd_diff, first_kill_diff,
+            adr, rating, rating_version, kast,
+            source_url, updated_at
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+        )
+        .bind(
+          matchHltvId,
+          stat.playerHltvId,
+          stat.teamHltvId,
+          stat.kills,
+          stat.deaths,
+          stat.kdDiff,
+          stat.firstKillDiff,
+          stat.adr,
+          stat.rating,
+          stat.ratingVersion,
+          stat.kast,
+          stat.sourceUrl,
+          timestamp,
+        ),
+    );
+  }
+
+  return statements;
+}
+
+function buildVetoStatements(db: D1Database, matchHltvId: number, vetoes: ParsedVeto[]): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM match_vetoes WHERE match_hltv_id = ?1').bind(matchHltvId),
+  ];
+  for (const veto of vetoes) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO match_vetoes (match_hltv_id, veto_order, action, team_hltv_id, team_name, map_name)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+        )
+        .bind(matchHltvId, veto.order, veto.action, veto.teamHltvId, veto.teamName, veto.mapName),
+    );
+  }
+  return statements;
+}
+
+function buildLineupStatements(
+  db: D1Database,
+  matchHltvId: number,
+  lineup: ParsedLineupPlayer[],
+  timestamp: string,
+): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM match_lineup WHERE match_hltv_id = ?1').bind(matchHltvId),
+  ];
+  for (const entry of lineup) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO players (hltv_player_id, nickname, updated_at)
+           VALUES (?1, ?2, ?3)
+           ON CONFLICT(hltv_player_id) DO UPDATE SET
+             nickname = excluded.nickname,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(entry.playerHltvId, entry.nickname, timestamp),
+    );
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO match_lineup (match_hltv_id, team_hltv_id, player_hltv_id, nickname)
+           VALUES (?1, ?2, ?3, ?4)`,
+        )
+        .bind(matchHltvId, entry.teamHltvId, entry.playerHltvId, entry.nickname),
+    );
+  }
+  return statements;
+}
+
+function buildStreamStatements(db: D1Database, matchHltvId: number, streams: ParsedStream[]): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM match_streams WHERE match_hltv_id = ?1').bind(matchHltvId),
+  ];
+  for (const stream of streams) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO match_streams (match_hltv_id, name, url, language, viewers)
+           VALUES (?1, ?2, ?3, ?4, ?5)`,
+        )
+        .bind(matchHltvId, stream.name, stream.url, stream.language, stream.viewers),
+    );
+  }
+  return statements;
+}
+
+function hasUsefulParsedChildren(parsed: ParsedMatch): boolean {
+  return (
+    parsed.maps.length > 0 ||
+    parsed.playerStats.length > 0 ||
+    parsed.playerAggregateStats.length > 0 ||
+    parsed.vetoes.length > 0 ||
+    parsed.lineup.length > 0 ||
+    parsed.streams.length > 0
+  );
 }
 
 function buildHtmlArtifactStatement(
@@ -188,10 +382,52 @@ export async function persistParsedMatch(
   if (htmlArtifact) {
     statements.push(buildHtmlArtifactStatement(env.DB, parsed.hltvMatchId, parsed.sourceUrl, htmlArtifact, timestamp));
   }
-  statements.push(...buildMapStatements(env.DB, parsed));
-  statements.push(...buildPlayerStatements(env.DB, parsed, timestamp));
+  if (hasUsefulParsedChildren(parsed)) {
+    if (parsed.maps.length > 0) {
+      statements.push(...buildMapStatements(env.DB, parsed));
+    }
+    if (parsed.playerStats.length > 0) {
+      statements.push(...buildPlayerStatements(env.DB, parsed, timestamp));
+    }
+    if (parsed.playerAggregateStats.length > 0) {
+      statements.push(
+        ...buildPlayerMatchStatStatements(env.DB, parsed.hltvMatchId, parsed.playerAggregateStats, timestamp),
+      );
+    }
+    if (parsed.vetoes.length > 0) {
+      statements.push(...buildVetoStatements(env.DB, parsed.hltvMatchId, parsed.vetoes));
+    }
+    if (parsed.lineup.length > 0) {
+      statements.push(...buildLineupStatements(env.DB, parsed.hltvMatchId, parsed.lineup, timestamp));
+    }
+    if (parsed.streams.length > 0) {
+      statements.push(...buildStreamStatements(env.DB, parsed.hltvMatchId, parsed.streams));
+    }
+  }
 
   await env.DB.batch(statements);
+}
+
+/** Record a challenge page without destructively replacing previously parsed normalized rows. */
+export async function recordIngestChallenge(
+  env: Env,
+  hltvMatchId: number,
+  sourceUrl: string,
+  htmlR2Key: string | null,
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO matches (hltv_match_id, source_url, status, html_r2_key, parser_version, ingest_error, last_ingested_at)
+       VALUES (?1, ?2, 'challenge', ?3, ?4, 'HLTV challenge page', ?5)
+       ON CONFLICT(hltv_match_id) DO UPDATE SET
+         source_url = excluded.source_url,
+         status = excluded.status,
+         html_r2_key = COALESCE(excluded.html_r2_key, matches.html_r2_key),
+         parser_version = excluded.parser_version,
+         ingest_error = excluded.ingest_error,
+         last_ingested_at = excluded.last_ingested_at`,
+  )
+    .bind(hltvMatchId, sourceUrl, htmlR2Key, PARSER_VERSION, nowIso())
+    .run();
 }
 
 /** Record a failed ingest attempt while preserving the most recent failure message. */

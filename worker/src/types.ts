@@ -74,7 +74,11 @@ export interface DemoIngestRequest {
 export interface TeamSummary {
   hltvTeamId: number | null;
   name: string;
+  rank: number | null;
 }
+
+/** Lifecycle status for a single map within a best-of-N match. */
+export type MapStatus = 'played' | 'upcoming' | 'tba';
 
 /** Map-level metadata parsed from an HLTV match page. */
 export interface ParsedMap {
@@ -83,6 +87,13 @@ export interface ParsedMap {
   sourceUrl: string | null;
   team1Score: number | null;
   team2Score: number | null;
+  order: number;
+  status: MapStatus;
+  pickTeamHltvId: number | null;
+  winnerTeamHltvId: number | null;
+  team1HalfScores: number[];
+  team2HalfScores: number[];
+  performanceUrl: string | null;
 }
 
 /** Per-player, per-map stats parsed from an HLTV match page. */
@@ -93,10 +104,56 @@ export interface ParsedPlayerStat {
   mapName: string;
   kills: number | null;
   deaths: number | null;
+  kdDiff: number | null;
+  firstKillDiff: number | null;
   adr: number | null;
   rating: number | null;
+  ratingVersion: string | null;
   kast: number | null;
   sourceUrl: string | null;
+}
+
+/** Aggregate (all-maps) per-player stats parsed from the all-content stats section. */
+export interface ParsedPlayerMatchStat {
+  playerHltvId: number;
+  nickname: string;
+  teamHltvId: number | null;
+  kills: number | null;
+  deaths: number | null;
+  kdDiff: number | null;
+  firstKillDiff: number | null;
+  adr: number | null;
+  rating: number | null;
+  ratingVersion: string | null;
+  kast: number | null;
+  sourceUrl: string | null;
+}
+
+/** Possible veto actions in the veto box. */
+export type VetoAction = 'pick' | 'ban' | 'remainder';
+
+/** A single step in the veto sequence. */
+export interface ParsedVeto {
+  order: number;
+  action: VetoAction;
+  teamHltvId: number | null;
+  teamName: string | null;
+  mapName: string | null;
+}
+
+/** A starting-lineup entry for a team in a match. */
+export interface ParsedLineupPlayer {
+  teamHltvId: number | null;
+  playerHltvId: number;
+  nickname: string;
+}
+
+/** A broadcast stream listed on the match page. */
+export interface ParsedStream {
+  name: string | null;
+  url: string | null;
+  language: string | null;
+  viewers: number | null;
 }
 
 /** Fully parsed match payload before persistence. */
@@ -105,6 +162,12 @@ export interface ParsedMatch {
   slug: string | null;
   sourceUrl: string;
   eventName: string | null;
+  eventHltvId: number | null;
+  eventSourceUrl: string | null;
+  matchStage: string | null;
+  matchFormat: string | null;
+  matchLocation: string | null;
+  matchStatus: string | null;
   bestOf: number | null;
   scheduledAt: string | null;
   team1: TeamSummary;
@@ -115,8 +178,13 @@ export interface ParsedMatch {
   status: MatchStatus;
   maps: ParsedMap[];
   playerStats: ParsedPlayerStat[];
+  playerAggregateStats: ParsedPlayerMatchStat[];
+  vetoes: ParsedVeto[];
+  lineup: ParsedLineupPlayer[];
+  streams: ParsedStream[];
   rawDemoUrl: string | null;
   parserVersion: string;
+  parseWarnings: string[];
 }
 
 /** Metadata returned after storing a raw artifact in R2. */

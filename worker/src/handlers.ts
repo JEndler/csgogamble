@@ -1,6 +1,6 @@
 import { acquirePageSnapshot } from './acquisition';
 import type { DiscoverResultsResponse, IngestMatchResponse, RecordDemoResponse } from './contracts';
-import { persistParsedMatch, recordDemoArtifact, recordIngestError, setCrawlCursor } from './db';
+import { persistParsedMatch, recordDemoArtifact, recordIngestChallenge, recordIngestError, setCrawlCursor } from './db';
 import {
   buildMatchUrl,
   buildResultsUrl,
@@ -41,7 +41,11 @@ export async function handleIngestMatch(env: Env, request: MatchIngestRequest): 
             'text/html; charset=utf-8',
           );
 
-    await persistParsedMatch(env, parsed, artifact);
+    if (parsed.status === 'challenge') {
+      await recordIngestChallenge(env, parsed.hltvMatchId, parsed.sourceUrl, artifact?.key ?? null);
+    } else {
+      await persistParsedMatch(env, parsed, artifact);
+    }
 
     const notes = artifact ? [] : ['RAW_HTML persistence disabled for this request'];
     if (request.acquisitionMode && request.acquisitionMode !== 'http') {

@@ -63,9 +63,12 @@ describe('classifyFailure', () => {
     expect(classifyFailure(new Error('Failed to navigate to URL'))).toBe('navigation_error');
   });
 
-  it('detects parse and worker errors', () => {
+  it('detects parse, worker, and rate-limit errors', () => {
     expect(classifyFailure(new Error('Could not extract match id from URL'))).toBe('parse_error');
     expect(classifyFailure(new Error('Internal /discover/results request failed with 500'))).toBe('worker_error');
+    expect(classifyFailure(new Error('Fetch failed for https://www.hltv.org/matches/1/foo with status 429'))).toBe(
+      'rate_limited',
+    );
   });
 
   it('falls back to unknown', () => {

@@ -3,7 +3,7 @@ import { createIngestRun } from './db';
 import { createDiscoverResultsMessage, enqueueMessages } from './queue';
 import type { Env } from './types';
 
-const DEFAULT_DISCOVERY_FANOUT_MAX_MATCHES = 20;
+const DEFAULT_DISCOVERY_FANOUT_MAX_MATCHES = 40;
 /**
  * Canary discoveries fetch a tiny slice of the source first. If they succeed,
  * the consumer enqueues the real fan-out; if they're challenged or classified

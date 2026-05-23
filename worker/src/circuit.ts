@@ -9,6 +9,7 @@ export type FailureClass =
   | 'navigation_error'
   | 'parse_error'
   | 'worker_error'
+  | 'rate_limited'
   | 'unknown';
 
 export interface CircuitState {
@@ -36,6 +37,7 @@ const TIMEOUT_PATTERNS = [/timed?[ -]out/i, /timeout/i, /etimedout/i];
 const NAVIGATION_PATTERNS = [/navigation/i, /net::err/i, /failed to navigate/i];
 const PARSE_PATTERNS = [/parse/i, /could not extract/i];
 const WORKER_ERROR_PATTERNS = [/internal\s.*request failed/i, /worker error/i];
+const RATE_LIMIT_PATTERNS = [/status\s+429/i, /too many requests/i, /rate[- ]?limit/i];
 
 /** Classify an error or response message into one of the canonical failure buckets. */
 export function classifyFailure(input: unknown): FailureClass {
@@ -47,6 +49,7 @@ export function classifyFailure(input: unknown): FailureClass {
   if (NAVIGATION_PATTERNS.some((pattern) => pattern.test(message))) return 'navigation_error';
   if (PARSE_PATTERNS.some((pattern) => pattern.test(message))) return 'parse_error';
   if (WORKER_ERROR_PATTERNS.some((pattern) => pattern.test(message))) return 'worker_error';
+  if (RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(message))) return 'rate_limited';
   return 'unknown';
 }
 

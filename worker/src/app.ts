@@ -1,5 +1,5 @@
 import { handleAcquisitionCanary } from './acquisition-canary';
-import { handleBackfillEnqueue, handleBackfillStart, handleBackfillStatus } from './admin';
+import { handleBackfillEnqueue, handleBackfillStart, handleBackfillStatus, handleDiscoveryEnqueue } from './admin';
 import {
   handleBrowserHistoryDebug,
   handleBrowserLimitsDebug,
@@ -80,6 +80,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       return await handleAcquisitionCanary(request, env);
     } catch (error) {
       return errorResponse(error instanceof Error ? error.message : 'Invalid acquisition canary body', 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/admin/discovery/enqueue') {
+    try {
+      return await handleDiscoveryEnqueue(request, env);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Invalid discovery enqueue body', 400);
     }
   }
 

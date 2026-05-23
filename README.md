@@ -32,9 +32,10 @@ Cron Trigger
 ```
 
 Current state:
-- the parser and persistence path work locally
-- the cron + queue orchestration skeleton exists in `worker/`
-- reliable Cloudflare-native acquisition against HLTV is still the main open risk
+- the parser and persistence path are production-usable for match volume ingestion
+- scheduled discovery runs through a canary-first `http-stealth` Worker fetch path
+- regular cron fan-out is capped at 40 matches per tick with queue `max_concurrency=1`
+- Browser Rendering remains wired for debug/spikes, but HLTV currently hard-challenges it
 
 Primary production app:
 - `worker/` — Cloudflare Worker, D1 migrations, parsing logic, ingestion scripts, tests
@@ -81,14 +82,14 @@ npm run check
 npm test
 npm run health:ingest -- --strict --samples 10
 npm run backfill:daemon -- --list-only --filter partial --max 50
-npm run backfill:daemon -- --apply --filter partial --max 50 --batch-size 10 --concurrency 1 --acquisition-mode browser-session
+npm run backfill:daemon -- --apply --filter partial --max 50 --batch-size 10 --concurrency 1 --acquisition-mode http-stealth
 npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100
 npm run health:ingest -- --strict --samples 20
 ```
 
 ## Operator runbook
 
-Production-like acquisition runs through the deployed Worker / Cloudflare Browser Rendering path. Do not run local browser scraping against HLTV unless Jakob explicitly approves that run.
+Production-like acquisition runs through the deployed Worker / Cloudflare-native path. Current HLTV default is Worker `fetch` with browser-shaped headers (`http-stealth`), not Cloudflare Browser Rendering. Do not run local browser scraping against HLTV unless Jakob explicitly approves that run.
 
 Required environment for Worker-native backfill commands:
 
@@ -112,11 +113,22 @@ cd worker
 npm run ops:canary
 ```
 
+40-match regular cron posture:
+
+```bash
+# configured in worker/src/scheduled.ts
+# canary first: maxMatches=1
+# follow-up fan-out: maxMatches=40
+# queue consumer max_concurrency=1 in wrangler.jsonc
+```
+
+Stress-test result: 30, 40, 45, 50, 75, and 100-match scheduled-style runs completed cleanly when the queue consumer was capped at concurrency 1. A 50-match run before that cap produced transient HLTV 429s, then recovered after paced retry. Keep the regular schedule at 40 until we add explicit rate-limited retry/backoff in the queue path.
+
 Resume an interrupted run:
 
 ```bash
 cd worker
-npm run ops:resume -- --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode browser-session
+npm run ops:resume -- --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode http-stealth
 ```
 
 Stale-run cleanup is dry-run by default; only add `--apply` after reviewing rows:

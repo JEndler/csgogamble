@@ -58,6 +58,7 @@ Worker-native acquisition/backfill:
 - `npm run backfill:daemon -- --list-only --filter partial --max 50` — list candidates only; no acquisition
 - `npm run backfill:daemon -- --apply --filter partial --max 50 --batch-size 10 --concurrency 1 --acquisition-mode http-stealth` — 50-match canary through deployed Worker/admin endpoints using the current winning HLTV mode
 - `npm run canary:acquisition -- --modes http-stealth,browser-native,browser-stealth,browser-session-stealth --repetitions 1` — compare acquisition modes without mutating match rows; `http-stealth` currently returns parseable HLTV HTML while Browser Rendering modes receive hard `Just a moment...` challenges
+- Regular cron discovery uses a canary-first `http-stealth` flow: maxMatches=1 canary, then maxMatches=40 fan-out, with queue consumer `max_concurrency=1`. 50-match fan-out without the queue concurrency cap produced transient HLTV 429s; 50/75/100 passed after the cap, but 40 is the safe default until rate-limited retry/backoff exists.
 - `npm run backfill:daemon -- --apply --resume --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode http-stealth` — resume an interrupted run
 - `npm run ops:canary` — canary alias
 - `npm run ops:resume -- --run-id <run-id>` — resume alias
@@ -85,7 +86,7 @@ Production-like acquisition must go through the deployed Worker / Cloudflare Bro
 ## Notes
 
 - HLTV currently challenges Cloudflare Browser Rendering with hard `Just a moment...` pages. Worker fetch plus browser-shaped headers (`http-stealth`) currently returns parseable HTML even though normal HLTV pages include soft `/cdn-cgi/challenge-platform/` script references.
-- Browser Rendering is now wired as a small spike only; it returns compact JSON summaries instead of raw HTML.
+- Browser Rendering is wired as a debug/spike path only; regular acquisition should stay on `http-stealth` until the canary says otherwise.
 - The current production shape aims to keep acquisition separate from parsing and persistence.
 - Some match pages legitimately do not expose player stats sections. Those remain `partial`.
 - Demo artifacts can be very large, so demos are not part of the immediate ingestion focus.

@@ -10,7 +10,7 @@ import {
 } from './db';
 import { buildMatchUrl } from './hltv';
 import { errorResponse, jsonResponse } from './http-response';
-import { buildIngestMatchMessages, enqueueMessages } from './queue';
+import { buildIngestMatchMessages, createDiscoverResultsMessage, enqueueMessages } from './queue';
 import type { AcquisitionMode, Env } from './types';
 
 const DEFAULT_BACKFILL_BATCH_SIZE = 25;
@@ -29,6 +29,16 @@ interface BackfillEnqueueBody {
   acquisitionMode?: AcquisitionMode;
   browserSessionKey?: string;
   source?: string;
+}
+
+interface DiscoveryEnqueueBody {
+  pageUrl?: string;
+  source?: string;
+  acquisitionMode?: AcquisitionMode;
+  browserSessionKey?: string;
+  maxMatches?: number;
+  canary?: boolean;
+  followupMaxMatches?: number;
 }
 
 interface BackfillStatusBody {
@@ -61,7 +71,7 @@ function readAcquisitionMode(value: unknown): AcquisitionMode {
   ) {
     return value;
   }
-  return 'browser-session';
+  return 'http-stealth';
 }
 
 function toCandidateSeeds(body: BackfillStartBody, baseUrl: string): BackfillCandidateSeed[] {
@@ -162,6 +172,37 @@ export async function handleBackfillEnqueue(request: Request, env: Env): Promise
   await setBackfillRunStatus(env, body.runId, 'running');
 
   return jsonResponse({ ok: true, runId: body.runId, enqueued: claimed.length, drained: false });
+}
+
+function readOptionalPositiveInteger(value: unknown, fallback: number, max: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? Math.min(value, max) : fallback;
+}
+
+/** POST /admin/discovery/enqueue — enqueue a scheduled-style discovery job for scale tests. */
+export async function handleDiscoveryEnqueue(request: Request, env: Env): Promise<Response> {
+  if (!isAuthorized(request, env)) return errorResponse('Unauthorized', 401);
+  const body = readJsonBody<DiscoveryEnqueueBody>(await request.json());
+  const canary = body.canary ?? true;
+  const maxMatches = readOptionalPositiveInteger(body.maxMatches, canary ? 1 : 20, 500);
+  const followupMaxMatches = readOptionalPositiveInteger(body.followupMaxMatches, 20, 500);
+  const acquisitionMode = readAcquisitionMode(body.acquisitionMode);
+  const source = body.source ?? `cron:manual-scale-test:${Date.now()}`;
+  const browserSessionKey = body.browserSessionKey ?? source.replace(/[^a-zA-Z0-9:_-]/g, '-');
+
+  await enqueueMessages(env, [
+    createDiscoverResultsMessage({
+      pageUrl: body.pageUrl,
+      source,
+      acquisitionMode,
+      browserSessionKey,
+      maxMatches,
+      canary,
+      followupMaxMatches,
+      persistHtml: true,
+    }),
+  ]);
+
+  return jsonResponse({ ok: true, source, acquisitionMode, maxMatches, canary, followupMaxMatches });
 }
 
 /** POST /admin/backfill/status — return current counters for a backfill run. */

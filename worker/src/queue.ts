@@ -49,7 +49,15 @@ function readOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function readOptionalAcquisitionMode(value: unknown): AcquisitionMode | undefined {
-  return value === 'http' || value === 'browser' || value === 'browser-session' ? value : undefined;
+  return value === 'http' ||
+    value === 'http-stealth' ||
+    value === 'browser' ||
+    value === 'browser-native' ||
+    value === 'browser-stealth' ||
+    value === 'browser-session' ||
+    value === 'browser-session-stealth'
+    ? value
+    : undefined;
 }
 
 function isQueueMessageValidationError(error: unknown): error is QueueMessageValidationError {
@@ -443,9 +451,9 @@ async function processIngestMessage(env: Env, message: IngestMatchQueueMessage):
       });
     }
   } catch (error) {
+    const failureClass = classifyFailure(error);
     if (backfillRunId && backfillCandidateId) {
-      const failureClass = classifyFailure(error);
-      if (failureClass === 'unknown') {
+      if (failureClass === 'unknown' || failureClass === 'rate_limited') {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
@@ -455,6 +463,9 @@ async function processIngestMessage(env: Env, message: IngestMatchQueueMessage):
         failureClass,
         message,
       });
+      return;
+    }
+    if (failureClass !== 'unknown') {
       return;
     }
     throw error;

@@ -110,7 +110,7 @@ npm run ops:canary
 Resume:
 
 ```bash
-npm run ops:resume -- --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode browser-session
+npm run ops:resume -- --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode http-stealth
 ```
 
 Close stale bookkeeping rows:
@@ -132,11 +132,12 @@ Operator checks:
 - preflight must pass hard gates before scaling
 - stale `ingest_runs` are closed with `npm run ops:close-stale-runs`, not manual D1 SQL
 - canary success means no crashes, no unclassified errors, no unexplained active stuck runs, parsed + partial >= 85%, challenge <= 8%, and raw artifact/enrichment coverage does not regress
+- regular scheduled discovery uses `http-stealth`, canary maxMatches=1, follow-up fan-out maxMatches=40, and queue consumer `max_concurrency=1`; keep this posture unless a new rate-limit backoff/retry mechanism is verified
 - resume must use the existing run id and must not duplicate candidate processing
 
 ## Current production posture
 
-The parser is production-usable and stores richer match metadata, maps, vetoes, lineups, streams, and player stats. Acquisition remains the highest-risk system boundary because protected sources can challenge or close browser sessions.
+The parser is production-usable and stores richer match metadata, maps, vetoes, lineups, streams, and player stats. Acquisition remains the highest-risk system boundary because protected sources can challenge or rate-limit, but current HLTV production posture is canary-first `http-stealth` through the deployed Worker, not Browser Rendering.
 
 When evaluating ingestion health, check both:
 

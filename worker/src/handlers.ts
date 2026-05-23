@@ -1,4 +1,5 @@
 import { acquirePageSnapshot } from './acquisition';
+import { classifyFailure } from './circuit';
 import type { DiscoverResultsResponse, IngestMatchResponse, RecordDemoResponse } from './contracts';
 import { persistParsedMatch, recordDemoArtifact, recordIngestChallenge, recordIngestError, setCrawlCursor } from './db';
 import {
@@ -66,6 +67,9 @@ export async function handleIngestMatch(env: Env, request: MatchIngestRequest): 
     return jsonResponse(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (classifyFailure(error) === 'rate_limited') {
+      return errorResponse(message, 429);
+    }
     await recordIngestError(env, hltvMatchId, matchUrl, message);
     return errorResponse(message, 500);
   }

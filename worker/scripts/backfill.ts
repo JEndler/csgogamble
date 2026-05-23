@@ -1,5 +1,5 @@
 /**
- * Backfill script: collect historical match HTML from HLTV /results
+ * Legacy local-only backfill script: collect historical match HTML from HLTV /results
  * and POST each to the local worker's /ingest/match endpoint.
  *
  * Uses the shared browser bootstrap (Playwright + stealth plugin) to
@@ -11,9 +11,12 @@
  *   3. Start the worker locally: npm run dev   (runs wrangler dev)
  *
  * Usage:
- *   npm run backfill
- *   npm run backfill -- --max 50 --headed
- *   npm run backfill -- --worker-url http://localhost:8787
+ *   npm run backfill -- --allow-local-hltv --max 50 --headed
+ *   npm run backfill -- --allow-local-hltv --worker-url http://localhost:8787
+ *
+ * Production-like acquisition must use `npm run backfill:daemon` against the
+ * deployed Worker. This script refuses to run unless --allow-local-hltv is
+ * passed explicitly.
  */
 
 import type { Browser, Page } from 'playwright';
@@ -33,6 +36,7 @@ interface BackfillOptions {
   workerUrl: string;
   headless: boolean;
   ingestTimeoutMs: number;
+  allowLocalHltv: boolean;
 }
 
 function parseArgs(): BackfillOptions {
@@ -43,6 +47,7 @@ function parseArgs(): BackfillOptions {
     workerUrl: DEFAULT_WORKER_URL,
     headless: true,
     ingestTimeoutMs: DEFAULT_INGEST_TIMEOUT_MS,
+    allowLocalHltv: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -57,6 +62,8 @@ function parseArgs(): BackfillOptions {
       opts.workerUrl = args[++i];
     } else if (arg === '--headed') {
       opts.headless = false;
+    } else if (arg === '--allow-local-hltv') {
+      opts.allowLocalHltv = true;
     }
   }
 
@@ -89,6 +96,11 @@ function isClosedBrowserError(err: unknown): boolean {
 
 async function main(): Promise<void> {
   const opts = parseArgs();
+  if (!opts.allowLocalHltv) {
+    throw new Error(
+      'Refusing local HLTV acquisition. Use npm run backfill:daemon for Worker-native backfill, or pass --allow-local-hltv for an explicitly approved local run.',
+    );
+  }
   console.log(
     `Backfill: max=${opts.max}, startOffset=${opts.startOffset}, worker=${opts.workerUrl}, headless=${opts.headless}\n`,
   );

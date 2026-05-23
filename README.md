@@ -69,19 +69,73 @@ Inside `worker/`:
 - HLTV parsing helpers
 - D1 persistence layer
 - R2 artifact storage
-- local Playwright-based acquisition scripts
+- Worker-native backfill and health scripts
+- legacy local Playwright acquisition guarded behind explicit `--allow-local-hltv`
 
 Useful commands:
 
 ```bash
 cd worker
 npm install
-npx playwright install chromium
 npm run check
 npm test
-npm run dev
-npm run backfill -- --max 10
+npm run health:ingest -- --strict --samples 10
+npm run backfill:daemon -- --list-only --filter partial --max 50
+npm run backfill:daemon -- --apply --filter partial --max 50 --batch-size 10 --concurrency 1 --acquisition-mode browser-session
+npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100
+npm run health:ingest -- --strict --samples 20
 ```
+
+## Operator runbook
+
+Production-like acquisition runs through the deployed Worker / Cloudflare Browser Rendering path. Do not run local browser scraping against HLTV unless Jakob explicitly approves that run.
+
+Required environment for Worker-native backfill commands:
+
+```bash
+export WORKER_URL="https://<deployed-worker-host>"
+export ADMIN_TOKEN="<worker-admin-token>"
+```
+
+Preflight:
+
+```bash
+cd worker
+npm run ops:preflight
+npm run health:ingest -- --json
+```
+
+50-match canary:
+
+```bash
+cd worker
+npm run ops:canary
+```
+
+Resume an interrupted run:
+
+```bash
+cd worker
+npm run ops:resume -- --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode browser-session
+```
+
+Stale-run cleanup is dry-run by default; only add `--apply` after reviewing rows:
+
+```bash
+cd worker
+npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100
+npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100 --apply
+```
+
+Post-run verification:
+
+```bash
+cd worker
+npm run ops:verify
+npm run health:ingest -- --json
+```
+
+Canary success means: no Worker crashes, no unclassified errors, no unexplained active stuck runs, parsed + partial >= 85%, challenge <= 8%, and raw artifact/parser/enrichment coverage does not regress.
 
 ## Roadmap
 

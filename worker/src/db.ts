@@ -495,26 +495,381 @@ export async function createIngestRun(
   target: string | null,
   status: string,
   message: string | null,
+  failureClass: string | null = null,
 ): Promise<number> {
+  const finishedAt = isTerminalRunStatus(status) ? nowIso() : null;
   const result = await env.DB.prepare(
-    `INSERT INTO ingest_runs (scope, target, status, message)
-       VALUES (?1, ?2, ?3, ?4)`,
+    `INSERT INTO ingest_runs (scope, target, status, message, failure_class, finished_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
   )
-    .bind(scope, target, status, message)
+    .bind(scope, target, status, message, failureClass, finishedAt)
     .run();
 
   return Number(result.meta.last_row_id ?? 0);
 }
 
-export async function finishIngestRun(env: Env, id: number, status: string, message: string | null): Promise<void> {
+export async function finishIngestRun(
+  env: Env,
+  id: number,
+  status: string,
+  message: string | null,
+  failureClass: string | null = null,
+): Promise<void> {
   await env.DB.prepare(
     `UPDATE ingest_runs
         SET status = ?2,
             message = ?3,
-            finished_at = ?4
+            failure_class = ?4,
+            finished_at = ?5
       WHERE id = ?1`,
   )
-    .bind(id, status, message, nowIso())
+    .bind(id, status, message, failureClass, nowIso())
+    .run();
+}
+
+const TERMINAL_RUN_STATUSES = new Set([
+  'success',
+  'error',
+  'challenge',
+  'skipped',
+  'skipped_circuit_open',
+  'skipped_stale_closed',
+  'stale_closed',
+  'failed_classified',
+]);
+
+function isTerminalRunStatus(status: string): boolean {
+  return TERMINAL_RUN_STATUSES.has(status);
+}
+
+// ── Backfill daemon helpers ─────────────────────────────────────────────────
+
+export interface BackfillCandidateSeed {
+  hltvMatchId: number;
+  sourceUrl: string | null;
+}
+
+/** Canonical terminal vocabulary for a backfill candidate. */
+export type BackfillCandidateTerminalState = 'parsed' | 'partial' | 'challenge' | 'skipped' | 'failed_classified';
+
+export const BACKFILL_TERMINAL_STATES: readonly BackfillCandidateTerminalState[] = [
+  'parsed',
+  'partial',
+  'challenge',
+  'skipped',
+  'failed_classified',
+];
+
+export interface BackfillRunRow {
+  id: number;
+  status: string;
+  totalCandidates: number;
+  enqueued: number;
+  parsed: number;
+  partial: number;
+  challenge: number;
+  failedClassified: number;
+  skipped: number;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  optionsJson: string | null;
+  candidateFilter: string | null;
+  notes: string | null;
+}
+
+export interface BackfillCandidateRow {
+  id: number;
+  runId: number;
+  hltvMatchId: number;
+  sourceUrl: string | null;
+  state: string;
+  failureClass: string | null;
+  attempts: number;
+  lastAttemptAt: string | null;
+  finishedAt: string | null;
+  message: string | null;
+}
+
+function mapBackfillCandidateRow(row: Record<string, unknown>): BackfillCandidateRow {
+  return {
+    id: Number(row.id),
+    runId: Number(row.run_id),
+    hltvMatchId: Number(row.hltv_match_id),
+    sourceUrl: (row.source_url as string | null) ?? null,
+    state: String(row.state),
+    failureClass: (row.failure_class as string | null) ?? null,
+    attempts: Number(row.attempts ?? 0),
+    lastAttemptAt: (row.last_attempt_at as string | null) ?? null,
+    finishedAt: (row.finished_at as string | null) ?? null,
+    message: (row.message as string | null) ?? null,
+  };
+}
+
+/** Create a new backfill run row and seed pending candidates atomically. */
+export async function createBackfillRun(
+  env: Env,
+  candidateFilter: string | null,
+  optionsJson: string | null,
+  candidates: BackfillCandidateSeed[],
+): Promise<number> {
+  const timestamp = nowIso();
+  const dedupedCandidates = Array.from(
+    new Map(candidates.map((candidate) => [candidate.hltvMatchId, candidate])).values(),
+  );
+  const insertRun = env.DB.prepare(
+    `INSERT INTO backfill_runs (status, candidate_filter, total_candidates, options_json, created_at, updated_at)
+       VALUES ('pending', ?1, ?2, ?3, ?4, ?4)`,
+  ).bind(candidateFilter, dedupedCandidates.length, optionsJson, timestamp);
+  const runRow = await insertRun.run();
+  const runId = Number(runRow.meta.last_row_id ?? 0);
+  if (!runId) throw new Error('Failed to allocate backfill run id');
+
+  if (dedupedCandidates.length > 0) {
+    const batch = dedupedCandidates.map((candidate) =>
+      env.DB.prepare(
+        `INSERT INTO backfill_candidates (run_id, hltv_match_id, source_url, state)
+           VALUES (?1, ?2, ?3, 'pending')
+           ON CONFLICT(run_id, hltv_match_id) DO NOTHING`,
+      ).bind(runId, candidate.hltvMatchId, candidate.sourceUrl),
+    );
+    // D1 batch limit ~50 statements per call; chunk to be safe.
+    const chunkSize = 50;
+    for (let i = 0; i < batch.length; i += chunkSize) {
+      // biome-ignore lint/performance/noAwaitInLoops: D1 batches must serialize for transactional semantics.
+      await env.DB.batch(batch.slice(i, i + chunkSize));
+    }
+  }
+  return runId;
+}
+
+export async function getBackfillCandidateForRun(
+  env: Env,
+  runId: number,
+  candidateId: number,
+): Promise<BackfillCandidateRow | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, run_id, hltv_match_id, source_url, state, failure_class, attempts, last_attempt_at,
+            finished_at, message
+       FROM backfill_candidates
+      WHERE run_id = ?1 AND id = ?2`,
+  )
+    .bind(runId, candidateId)
+    .first<Record<string, unknown>>();
+  return row ? mapBackfillCandidateRow(row) : null;
+}
+
+export async function getBackfillRun(env: Env, runId: number): Promise<BackfillRunRow | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, status, total_candidates, enqueued, parsed, partial, challenge,
+            failed_classified, skipped,
+            created_at, updated_at, finished_at, options_json, candidate_filter, notes
+       FROM backfill_runs WHERE id = ?1`,
+  )
+    .bind(runId)
+    .first<Record<string, unknown>>();
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    status: String(row.status),
+    totalCandidates: Number(row.total_candidates ?? 0),
+    enqueued: Number(row.enqueued ?? 0),
+    parsed: Number(row.parsed ?? 0),
+    partial: Number(row.partial ?? 0),
+    challenge: Number(row.challenge ?? 0),
+    failedClassified: Number(row.failed_classified ?? 0),
+    skipped: Number(row.skipped ?? 0),
+    createdAt: String(row.created_at ?? ''),
+    updatedAt: String(row.updated_at ?? ''),
+    finishedAt: (row.finished_at as string | null) ?? null,
+    optionsJson: (row.options_json as string | null) ?? null,
+    candidateFilter: (row.candidate_filter as string | null) ?? null,
+    notes: (row.notes as string | null) ?? null,
+  };
+}
+
+export async function listPendingBackfillCandidates(
+  env: Env,
+  runId: number,
+  limit: number,
+): Promise<BackfillCandidateRow[]> {
+  const rows = await env.DB.prepare(
+    `SELECT id, run_id, hltv_match_id, source_url, state, failure_class, attempts, last_attempt_at,
+            finished_at, message
+       FROM backfill_candidates
+      WHERE run_id = ?1 AND state = 'pending'
+      ORDER BY id
+      LIMIT ?2`,
+  )
+    .bind(runId, limit)
+    .all<Record<string, unknown>>();
+
+  return (rows.results ?? []).map(mapBackfillCandidateRow);
+}
+
+/** D1 caps total bound parameters per statement; stay well under that ceiling. */
+const BACKFILL_CANDIDATE_ID_CHUNK = 50;
+
+function chunkIds(ids: readonly number[]): number[][] {
+  const chunks: number[][] = [];
+  for (let i = 0; i < ids.length; i += BACKFILL_CANDIDATE_ID_CHUNK) {
+    chunks.push(ids.slice(i, i + BACKFILL_CANDIDATE_ID_CHUNK));
+  }
+  return chunks;
+}
+
+/**
+ * Atomically claim up to `limit` pending candidates for a backfill run by
+ * flipping their state to `enqueued`, bumping attempts/last_attempt_at, and
+ * returning the affected rows in one statement. RETURNING ensures the SELECT
+ * and UPDATE cannot race against a concurrent enqueue call.
+ */
+export async function claimPendingBackfillCandidates(
+  env: Env,
+  runId: number,
+  limit: number,
+): Promise<BackfillCandidateRow[]> {
+  if (limit <= 0) return [];
+  const timestamp = nowIso();
+  const rows = await env.DB.prepare(
+    `UPDATE backfill_candidates
+        SET state = 'enqueued',
+            attempts = attempts + 1,
+            last_attempt_at = ?2
+      WHERE id IN (
+        SELECT id FROM backfill_candidates
+         WHERE run_id = ?1 AND state = 'pending'
+         ORDER BY id
+         LIMIT ?3
+      )
+      RETURNING id, run_id, hltv_match_id, source_url, state, failure_class,
+                attempts, last_attempt_at, finished_at, message`,
+  )
+    .bind(runId, timestamp, limit)
+    .all<Record<string, unknown>>();
+  return (rows.results ?? []).map(mapBackfillCandidateRow);
+}
+
+/**
+ * Release previously claimed candidates back to pending. Used when the queue
+ * send fails after a successful claim, so work is not silently lost. Only rows
+ * still in `enqueued` are reverted (a terminal transition wins).
+ */
+export async function releaseBackfillCandidates(env: Env, candidateIds: readonly number[]): Promise<void> {
+  if (candidateIds.length === 0) return;
+  for (const chunk of chunkIds(candidateIds)) {
+    const placeholders = chunk.map((_, idx) => `?${idx + 1}`).join(',');
+    // biome-ignore lint/performance/noAwaitInLoops: D1 chunking must serialize.
+    await env.DB.prepare(
+      `UPDATE backfill_candidates
+          SET state = 'pending',
+              last_attempt_at = last_attempt_at
+        WHERE state = 'enqueued' AND id IN (${placeholders})`,
+    )
+      .bind(...chunk)
+      .run();
+  }
+}
+
+/** Count backfill candidates that have been claimed/enqueued but not finalized. */
+export async function countInFlightBackfillCandidates(env: Env, runId: number): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS count
+       FROM backfill_candidates
+      WHERE run_id = ?1 AND state = 'enqueued'`,
+  )
+    .bind(runId)
+    .first<Record<string, unknown>>();
+  return Number(row?.count ?? 0);
+}
+
+/** Count candidates that are still pending or enqueued for a run. */
+export async function countOpenBackfillCandidates(env: Env, runId: number): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS count
+       FROM backfill_candidates
+      WHERE run_id = ?1 AND state IN ('pending', 'enqueued')`,
+  )
+    .bind(runId)
+    .first<Record<string, unknown>>();
+  return Number(row?.count ?? 0);
+}
+
+/**
+ * Finalize a single backfill candidate to a terminal state and record the
+ * matching failure_class / message. Called by the queue ingest consumer after
+ * /ingest/match returns.
+ *
+ * Returns true only when the candidate moved from `enqueued` to terminal.
+ * Duplicate queue deliveries/retries for an already-terminal candidate return
+ * false, so run counters cannot be double-incremented.
+ */
+export async function finalizeBackfillCandidate(
+  env: Env,
+  candidateId: number,
+  terminalState: BackfillCandidateTerminalState,
+  options: { failureClass?: string | null; message?: string | null } = {},
+): Promise<boolean> {
+  const timestamp = nowIso();
+  const result = await env.DB.prepare(
+    `UPDATE backfill_candidates
+        SET state = ?2,
+            failure_class = ?3,
+            message = ?4,
+            finished_at = ?5
+      WHERE id = ?1 AND state = 'enqueued'`,
+  )
+    .bind(
+      candidateId,
+      terminalState,
+      options.failureClass ?? null,
+      options.message ? options.message.slice(0, 900) : null,
+      timestamp,
+    )
+    .run();
+  return Boolean(result.meta.changed_db);
+}
+
+/** Counter columns tracked on backfill_runs (aligned to candidate vocabulary). */
+export type BackfillRunCounter = 'enqueued' | 'parsed' | 'partial' | 'challenge' | 'failed_classified' | 'skipped';
+
+/** Bump the per-state counter on a backfill_runs row by `delta`. */
+export async function incrementBackfillCounter(
+  env: Env,
+  runId: number,
+  counter: BackfillRunCounter,
+  delta: number,
+): Promise<void> {
+  if (delta === 0) return;
+  await env.DB.prepare(
+    `UPDATE backfill_runs
+        SET ${counter} = ${counter} + ?2,
+            updated_at = ?3
+      WHERE id = ?1`,
+  )
+    .bind(runId, delta, nowIso())
+    .run();
+}
+
+export async function setBackfillRunStatus(
+  env: Env,
+  runId: number,
+  status: string,
+  options: { finishedAt?: string | null; notes?: string | null } = {},
+): Promise<void> {
+  const timestamp = nowIso();
+  await env.DB.prepare(
+    `UPDATE backfill_runs
+        SET status = ?2,
+            updated_at = ?3,
+            finished_at = CASE
+              WHEN ?2 IN ('completed', 'failed', 'cancelled') THEN COALESCE(?4, finished_at, ?3)
+              ELSE COALESCE(?4, finished_at)
+            END,
+            notes = COALESCE(?5, notes)
+      WHERE id = ?1`,
+  )
+    .bind(runId, status, timestamp, options.finishedAt ?? null, options.notes ?? null)
     .run();
 }
 

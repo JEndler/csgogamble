@@ -1,11 +1,32 @@
 import { handleRequest } from './app';
-import type { DiscoverResultsResponse, ErrorResponse, IngestMatchResponse } from './contracts';
-import { createIngestRun, finishIngestRun, releaseCrawlLock, tryAcquireCrawlLock } from './db';
+import {
+  classifyFailure,
+  evaluateCircuit,
+  type FailureClass,
+  recordFailure,
+  recordSuccess,
+  SCHEDULED_DISCOVERY_CIRCUIT_KEY,
+} from './circuit';
+import type { DiscoverResultsResponse, ErrorResponse, IngestMatchResponse, MatchStatus } from './contracts';
+import {
+  type BackfillCandidateTerminalState,
+  countOpenBackfillCandidates,
+  createIngestRun,
+  finalizeBackfillCandidate,
+  finishIngestRun,
+  getBackfillCandidateForRun,
+  incrementBackfillCounter,
+  releaseCrawlLock,
+  setBackfillRunStatus,
+  tryAcquireCrawlLock,
+} from './db';
 import type { AcquisitionMode, DiscoverQueueMessage, Env, IngestMatchQueueMessage, WorkerQueueMessage } from './types';
 
 const INTERNAL_BASE_URL = 'https://internal.csgogamble-worker';
 const SCHEDULED_DISCOVER_LOCK_KEY = 'scheduled_discovery_lock';
 const SCHEDULED_DISCOVER_LOCK_TTL_MS = 10 * 60 * 1_000;
+/** Canary challenge must open the circuit immediately to abort fan-out. */
+const CANARY_CHALLENGE_THRESHOLD = 1;
 
 type QueueDispatchResult = DiscoverResultsResponse | IngestMatchResponse;
 
@@ -68,6 +89,8 @@ export function createDiscoverResultsMessage(payload: DiscoverQueueMessage['payl
       acquisitionMode: payload.acquisitionMode,
       browserSessionKey: payload.browserSessionKey,
       maxMatches: payload.maxMatches,
+      canary: payload.canary,
+      followupMaxMatches: payload.followupMaxMatches,
     },
   };
 }
@@ -83,6 +106,8 @@ export function createIngestMatchMessage(payload: IngestMatchQueueMessage['paylo
       source: payload.source,
       acquisitionMode: payload.acquisitionMode,
       browserSessionKey: payload.browserSessionKey,
+      backfillRunId: payload.backfillRunId,
+      backfillCandidateId: payload.backfillCandidateId,
     },
   };
 }
@@ -114,6 +139,8 @@ function parseDiscoverPayload(payload: Record<string, unknown>): DiscoverQueueMe
     acquisitionMode: readOptionalAcquisitionMode(payload.acquisitionMode),
     browserSessionKey: readOptionalString(payload.browserSessionKey),
     maxMatches: readOptionalNumber(payload.maxMatches),
+    canary: readOptionalBoolean(payload.canary),
+    followupMaxMatches: readOptionalNumber(payload.followupMaxMatches),
   });
 
   if (payload.pageUrl !== undefined && message.payload.pageUrl === undefined && payload.pageUrl !== null) {
@@ -136,6 +163,8 @@ function parseIngestPayload(payload: Record<string, unknown>): IngestMatchQueueM
     source: readOptionalString(payload.source),
     acquisitionMode: readOptionalAcquisitionMode(payload.acquisitionMode),
     browserSessionKey: readOptionalString(payload.browserSessionKey),
+    backfillRunId: readOptionalNumber(payload.backfillRunId),
+    backfillCandidateId: readOptionalNumber(payload.backfillCandidateId),
   });
 
   if (!message.payload.matchUrl && message.payload.matchId === undefined) {
@@ -201,6 +230,30 @@ async function runDiscovery(env: Env, message: DiscoverQueueMessage, runId: numb
     maxMatches: message.payload.maxMatches,
   });
 
+  // Canary discoveries don't fan out themselves; they enqueue a follow-up
+  // discovery sized by `followupMaxMatches` after proving the source is healthy.
+  if (message.payload.canary) {
+    const followupMaxMatches = message.payload.followupMaxMatches ?? 20;
+    await enqueueMessages(env, [
+      createDiscoverResultsMessage({
+        source: message.payload.source ? `${message.payload.source}:followup` : 'cron:canary:followup',
+        acquisitionMode: message.payload.acquisitionMode,
+        browserSessionKey: message.payload.browserSessionKey,
+        maxMatches: followupMaxMatches,
+        persistHtml: message.payload.persistHtml,
+      }),
+    ]);
+    if (runId) {
+      await finishIngestRun(
+        env,
+        runId,
+        'success',
+        `Canary discovered ${response.discovered} matches; enqueued follow-up discovery with maxMatches=${followupMaxMatches}`,
+      );
+    }
+    return;
+  }
+
   const ingestMessages = buildIngestMatchMessages(response.matchUrls, {
     persistHtml: message.payload.persistHtml,
     source: message.payload.source,
@@ -247,17 +300,35 @@ function buildDiscoverContext(message: DiscoverQueueMessage): DiscoverContext {
 
 async function startDiscoverRun(env: Env, message: DiscoverQueueMessage, context: DiscoverContext): Promise<number> {
   if (!context.isScheduledRun) return 0;
+  const scope = message.payload.canary ? 'scheduled-discovery-canary' : 'scheduled-discovery';
   return await createIngestRun(
     env,
-    'scheduled-discovery',
+    scope,
     context.runTarget,
     'running',
-    `Starting scheduled discovery with maxMatches=${message.payload.maxMatches ?? 'default'}`,
+    `Starting ${message.payload.canary ? 'canary ' : ''}scheduled discovery with maxMatches=${message.payload.maxMatches ?? 'default'}`,
   );
 }
 
 async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): Promise<void> {
   const context = buildDiscoverContext(message);
+
+  if (context.isScheduledRun) {
+    const decision = await evaluateCircuit(env, { key: SCHEDULED_DISCOVERY_CIRCUIT_KEY });
+    if (decision.open) {
+      const cooldownMinutes = Math.ceil(decision.cooldownRemainingMs / 60_000);
+      await createIngestRun(
+        env,
+        message.payload.canary ? 'scheduled-discovery-canary' : 'scheduled-discovery',
+        context.runTarget,
+        'skipped_circuit_open',
+        `Circuit open; cooldown ${cooldownMinutes}m remaining (lastClass=${decision.state.lastFailureClass ?? 'none'})`,
+        decision.state.lastFailureClass,
+      );
+      return;
+    }
+  }
+
   const lockAcquired = context.lockToken
     ? await tryAcquireCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, context.lockToken, SCHEDULED_DISCOVER_LOCK_TTL_MS)
     : true;
@@ -266,7 +337,7 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
     if (context.isScheduledRun) {
       await createIngestRun(
         env,
-        'scheduled-discovery',
+        message.payload.canary ? 'scheduled-discovery-canary' : 'scheduled-discovery',
         context.runTarget,
         'skipped',
         'Skipped because another scheduled discovery batch still holds the crawl lock',
@@ -279,10 +350,29 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
 
   try {
     await runDiscovery(env, message, runId);
+    if (context.isScheduledRun) {
+      await recordSuccess(env, { key: SCHEDULED_DISCOVERY_CIRCUIT_KEY });
+    }
   } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    const failureClass: FailureClass = classifyFailure(error);
+    const isClassified = failureClass !== 'unknown';
+
+    if (context.isScheduledRun) {
+      await recordFailure(env, failureClass, messageText, {
+        key: SCHEDULED_DISCOVERY_CIRCUIT_KEY,
+        threshold: message.payload.canary ? CANARY_CHALLENGE_THRESHOLD : undefined,
+      });
+    }
+
     if (runId) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      await finishIngestRun(env, runId, 'error', messageText);
+      const finalStatus = failureClass === 'challenge' ? 'challenge' : isClassified ? 'failed_classified' : 'error';
+      await finishIngestRun(env, runId, finalStatus, messageText, failureClass);
+    }
+
+    if (failureClass === 'challenge' || isClassified) {
+      // Classified failures are not retried — retrying a challenge storm just wastes the source budget.
+      return;
     }
     throw error;
   } finally {
@@ -292,15 +382,83 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
   }
 }
 
+/**
+ * Map an ingest match status to the canonical backfill candidate terminal
+ * state. `parsed`/`partial`/`challenge` map 1:1; `error` becomes
+ * `failed_classified` because the consumer already classified the failure.
+ */
+function ingestStatusToCandidateState(status: MatchStatus | null): BackfillCandidateTerminalState {
+  switch (status) {
+    case 'parsed':
+      return 'parsed';
+    case 'partial':
+      return 'partial';
+    case 'challenge':
+      return 'challenge';
+    default:
+      return 'failed_classified';
+  }
+}
+
+async function finalizeBackfillFromIngest(
+  env: Env,
+  runId: number,
+  candidateId: number,
+  terminalState: BackfillCandidateTerminalState,
+  options: { failureClass?: string | null; message?: string | null } = {},
+): Promise<boolean> {
+  const finalized = await finalizeBackfillCandidate(env, candidateId, terminalState, options);
+  if (!finalized) return false;
+
+  await incrementBackfillCounter(env, runId, terminalState, 1);
+  if ((await countOpenBackfillCandidates(env, runId)) === 0) {
+    await setBackfillRunStatus(env, runId, 'completed');
+  }
+  return true;
+}
+
 async function processIngestMessage(env: Env, message: IngestMatchQueueMessage): Promise<void> {
-  await invokeEndpoint<IngestMatchResponse>(env, '/ingest/match', {
-    matchUrl: message.payload.matchUrl,
-    matchId: message.payload.matchId,
-    html: message.payload.html,
-    persistHtml: message.payload.persistHtml,
-    acquisitionMode: message.payload.acquisitionMode,
-    browserSessionKey: message.payload.browserSessionKey,
-  });
+  const { backfillRunId, backfillCandidateId } = message.payload;
+  if (backfillRunId && backfillCandidateId) {
+    const candidate = await getBackfillCandidateForRun(env, backfillRunId, backfillCandidateId);
+    if (!candidate || candidate.state !== 'enqueued') {
+      return;
+    }
+  }
+  try {
+    const response = await invokeEndpoint<IngestMatchResponse>(env, '/ingest/match', {
+      matchUrl: message.payload.matchUrl,
+      matchId: message.payload.matchId,
+      html: message.payload.html,
+      persistHtml: message.payload.persistHtml,
+      acquisitionMode: message.payload.acquisitionMode,
+      browserSessionKey: message.payload.browserSessionKey,
+    });
+
+    if (backfillRunId && backfillCandidateId) {
+      const terminalState = ingestStatusToCandidateState(response.parsed?.status ?? null);
+      await finalizeBackfillFromIngest(env, backfillRunId, backfillCandidateId, terminalState, {
+        failureClass: terminalState === 'challenge' ? 'challenge' : null,
+        message: response.parsed?.parseWarnings?.[0] ?? null,
+      });
+    }
+  } catch (error) {
+    if (backfillRunId && backfillCandidateId) {
+      const failureClass = classifyFailure(error);
+      if (failureClass === 'unknown') {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      const terminalState: BackfillCandidateTerminalState =
+        failureClass === 'challenge' ? 'challenge' : 'failed_classified';
+      await finalizeBackfillFromIngest(env, backfillRunId, backfillCandidateId, terminalState, {
+        failureClass,
+        message,
+      });
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function processQueueBatch(batch: MessageBatch<unknown>, env: Env): Promise<void> {

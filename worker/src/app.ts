@@ -1,3 +1,4 @@
+import { handleBackfillEnqueue, handleBackfillStart, handleBackfillStatus } from './admin';
 import {
   handleBrowserHistoryDebug,
   handleBrowserLimitsDebug,
@@ -70,6 +71,30 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       return await handleDiscoverResults(env, parseDiscoverRequest(await request.json()));
     } catch (error) {
       return errorResponse(error instanceof Error ? error.message : 'Invalid discover body', 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/admin/backfill/start') {
+    try {
+      return await handleBackfillStart(request, env);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Invalid backfill start body', 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/admin/backfill/enqueue') {
+    try {
+      return await handleBackfillEnqueue(request, env);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Invalid backfill enqueue body', 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/admin/backfill/status') {
+    try {
+      return await handleBackfillStatus(request, env);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Invalid backfill status body', 400);
     }
   }
 

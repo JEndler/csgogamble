@@ -81,6 +81,59 @@ npm run reparse:raw-html -- --apply --resume --limit 25 --batch-size 5
 
 `npm run check` includes TypeScript and Biome. Biome is intentionally strict. Fix warnings instead of weakening rules unless there is a strong documented reason.
 
+## Operator acquisition loop
+
+Use deployed Worker / Cloudflare-native acquisition for production-like runs. Local execution is allowed for tests, parser replay against stored artifacts, D1/R2 inspection, migrations, typechecks, health checks, and docs. Do not locally scrape protected sources.
+
+Run from `worker/`.
+
+Required for Worker-native backfill:
+
+```bash
+export WORKER_URL="https://<deployed-worker-host>"
+export ADMIN_TOKEN="<worker-admin-token>"
+```
+
+Preflight:
+
+```bash
+npm run ops:preflight
+npm run health:ingest -- --json
+```
+
+Canary batch:
+
+```bash
+npm run ops:canary
+```
+
+Resume:
+
+```bash
+npm run ops:resume -- --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode browser-session
+```
+
+Close stale bookkeeping rows:
+
+```bash
+npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100
+npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100 --apply
+```
+
+Post-run verification:
+
+```bash
+npm run ops:verify
+npm run health:ingest -- --json
+```
+
+Operator checks:
+
+- preflight must pass hard gates before scaling
+- stale `ingest_runs` are closed with `npm run ops:close-stale-runs`, not manual D1 SQL
+- canary success means no crashes, no unclassified errors, no unexplained active stuck runs, parsed + partial >= 85%, challenge <= 8%, and raw artifact/enrichment coverage does not regress
+- resume must use the existing run id and must not duplicate candidate processing
+
 ## Current production posture
 
 The parser is production-usable and stores richer match metadata, maps, vetoes, lineups, streams, and player stats. Acquisition remains the highest-risk system boundary because protected sources can challenge or close browser sessions.

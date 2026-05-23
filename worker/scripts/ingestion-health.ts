@@ -123,6 +123,23 @@ interface WarningDistributionRow {
 
 interface IngestRunHealth {
   stuckRuns: number;
+  staleClosedRuns: number;
+  activeStuckRuns: number;
+}
+
+interface DiscoveryHealth {
+  recent24hRuns: number;
+  recent24hSuccess: number;
+  recent24hChallenge: number;
+  recent24hSkippedCircuitOpen: number;
+  recent24hFailedClassified: number;
+  recent24hError: number;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastFailureClass: string | null;
+  circuitOpen: boolean;
+  circuitCooldownMinutesRemaining: number | null;
+  circuitConsecutiveChallenges: number;
 }
 
 interface ChildSanity {
@@ -174,6 +191,7 @@ interface Report {
   parseWarningSummary: ParseWarningSummary;
   warningDistribution: WarningDistributionRow[];
   ingestRunHealth: IngestRunHealth;
+  discoveryHealth: DiscoveryHealth;
   childSanity: ChildSanity;
   staleParserSamples: MatchSample[];
   remediationSamples: MatchSample[];
@@ -584,13 +602,106 @@ async function getWarningDistribution(): Promise<WarningDistributionRow[]> {
 
 async function getIngestRunHealth(): Promise<IngestRunHealth> {
   const rows = await queryD1(
-    `SELECT COUNT(*) AS stuck_runs
-    FROM ingest_runs
-    WHERE finished_at IS NULL
-      AND created_at < datetime('now', '-2 hours');`,
-    (row): IngestRunHealth => ({ stuckRuns: toNumber(row.stuck_runs) }),
+    `SELECT
+        SUM(finished_at IS NULL AND created_at < datetime('now', '-2 hours')) AS stuck_runs,
+        SUM(status = 'stale_closed' OR status = 'skipped_stale_closed') AS stale_closed_runs,
+        SUM(finished_at IS NULL AND status = 'running' AND created_at < datetime('now', '-2 hours')) AS active_stuck_runs
+      FROM ingest_runs;`,
+    (row): IngestRunHealth => ({
+      stuckRuns: toNumber(row.stuck_runs),
+      staleClosedRuns: toNumber(row.stale_closed_runs),
+      activeStuckRuns: toNumber(row.active_stuck_runs),
+    }),
   );
-  return one(rows, { stuckRuns: 0 });
+  return one(rows, { stuckRuns: 0, staleClosedRuns: 0, activeStuckRuns: 0 });
+}
+
+interface CircuitStatePayload {
+  consecutiveChallenges?: number;
+  lastFailureClass?: string | null;
+  cooldownUntilMs?: number | null;
+}
+
+async function getDiscoveryHealth(): Promise<DiscoveryHealth> {
+  const runRows = await queryD1(
+    `SELECT
+        COUNT(*) AS total,
+        SUM(status = 'success') AS success_count,
+        SUM(status = 'challenge') AS challenge_count,
+        SUM(status = 'skipped_circuit_open') AS skipped_circuit,
+        SUM(status = 'failed_classified') AS failed_classified,
+        SUM(status = 'error') AS error_count,
+        MAX(CASE WHEN status = 'success' THEN finished_at END) AS last_success,
+        MAX(CASE WHEN status IN ('challenge', 'error', 'failed_classified') THEN finished_at END) AS last_failure
+      FROM ingest_runs
+      WHERE scope = 'scheduled-discovery'
+        AND created_at >= datetime('now', '-24 hours');`,
+    (row) => ({
+      total: toNumber(row.total),
+      successCount: toNumber(row.success_count),
+      challengeCount: toNumber(row.challenge_count),
+      skippedCircuit: toNumber(row.skipped_circuit),
+      failedClassified: toNumber(row.failed_classified),
+      errorCount: toNumber(row.error_count),
+      lastSuccess: toNullableString(row.last_success),
+      lastFailure: toNullableString(row.last_failure),
+    }),
+  );
+  const summary = one(runRows, {
+    total: 0,
+    successCount: 0,
+    challengeCount: 0,
+    skippedCircuit: 0,
+    failedClassified: 0,
+    errorCount: 0,
+    lastSuccess: null,
+    lastFailure: null,
+  });
+
+  const lastFailureClassRows = await queryD1(
+    `SELECT failure_class
+       FROM ingest_runs
+      WHERE scope = 'scheduled-discovery'
+        AND failure_class IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1;`,
+    (row) => toNullableString(row.failure_class),
+  );
+
+  const circuitRows = await queryD1(`SELECT value FROM crawl_state WHERE key = 'discovery_circuit_v1';`, (row) =>
+    toNullableString(row.value),
+  );
+
+  const circuitValue = circuitRows[0] ?? null;
+  let parsed: CircuitStatePayload = {};
+  if (circuitValue) {
+    try {
+      parsed = JSON.parse(circuitValue) as CircuitStatePayload;
+    } catch {
+      parsed = {};
+    }
+  }
+  const cooldownUntilMs = parsed.cooldownUntilMs ?? null;
+  const nowMs = Date.now();
+  const cooldownRemainingMinutes =
+    typeof cooldownUntilMs === 'number' && cooldownUntilMs > nowMs
+      ? Math.ceil((cooldownUntilMs - nowMs) / 60_000)
+      : null;
+
+  return {
+    recent24hRuns: summary.total,
+    recent24hSuccess: summary.successCount,
+    recent24hChallenge: summary.challengeCount,
+    recent24hSkippedCircuitOpen: summary.skippedCircuit,
+    recent24hFailedClassified: summary.failedClassified,
+    recent24hError: summary.errorCount,
+    lastSuccessAt: summary.lastSuccess,
+    lastFailureAt: summary.lastFailure,
+    lastFailureClass: lastFailureClassRows[0] ?? parsed.lastFailureClass ?? null,
+    circuitOpen: cooldownRemainingMinutes !== null,
+    circuitCooldownMinutesRemaining: cooldownRemainingMinutes,
+    circuitConsecutiveChallenges: Number(parsed.consecutiveChallenges ?? 0),
+  };
 }
 
 async function getChildSanity(): Promise<ChildSanity> {
@@ -886,8 +997,32 @@ function buildParseWarningGates(summary: ParseWarningSummary, warningDistributio
 
 function buildIngestRunGates(runHealth: IngestRunHealth): Gate[] {
   return [
-    gate(runHealth.stuckRuns > 5, 'fail', 'stuck ingest runs <= 5', `${runHealth.stuckRuns}`),
-    gate(runHealth.stuckRuns > 0, 'warn', 'no stuck ingest runs', `${runHealth.stuckRuns}`),
+    gate(runHealth.activeStuckRuns > 5, 'fail', 'active stuck ingest runs <= 5', `${runHealth.activeStuckRuns}`),
+    gate(runHealth.activeStuckRuns > 0, 'warn', 'no active stuck ingest runs', `${runHealth.activeStuckRuns}`),
+  ];
+}
+
+function buildDiscoveryGates(discovery: DiscoveryHealth): Gate[] {
+  const challengeFanout = discovery.recent24hChallenge + discovery.recent24hFailedClassified;
+  return [
+    gate(
+      challengeFanout > 2 && !discovery.circuitOpen,
+      'fail',
+      '24h scheduled-discovery challenge fan-out <= 2 when circuit closed',
+      `${challengeFanout} failures`,
+    ),
+    gate(
+      discovery.circuitOpen,
+      'warn',
+      'scheduled-discovery circuit closed',
+      `open, ${discovery.circuitCooldownMinutesRemaining ?? '?'}m remaining, lastClass=${discovery.lastFailureClass ?? 'none'}`,
+    ),
+    gate(
+      discovery.recent24hRuns > 0 && discovery.recent24hSuccess === 0,
+      'warn',
+      'at least one successful scheduled discovery in 24h',
+      `runs=${discovery.recent24hRuns} success=${discovery.recent24hSuccess}`,
+    ),
   ];
 }
 
@@ -913,6 +1048,7 @@ function buildGates(report: Omit<Report, 'gates'>): Gate[] {
     ...buildMissingDataGates(report.missingCriticalData),
     ...buildParseWarningGates(report.parseWarningSummary, report.warningDistribution),
     ...buildIngestRunGates(report.ingestRunHealth),
+    ...buildDiscoveryGates(report.discoveryHealth),
     ...buildChildSanityGates(report.childSanity),
   ];
 }
@@ -963,6 +1099,19 @@ function printHeaderLines(report: Report): void {
   );
   console.log(
     `Parse warnings: matches=${report.parseWarningSummary.matchesWithWarnings}/${report.parseWarningSummary.total} (${report.parseWarningSummary.warningMatchPct}%)`,
+  );
+  const discovery = report.discoveryHealth;
+  console.log(
+    `Discovery(24h): runs=${discovery.recent24hRuns} success=${discovery.recent24hSuccess} challenge=${discovery.recent24hChallenge} ` +
+      `skippedCircuitOpen=${discovery.recent24hSkippedCircuitOpen} failedClassified=${discovery.recent24hFailedClassified} error=${discovery.recent24hError}`,
+  );
+  console.log(
+    `Circuit: open=${discovery.circuitOpen} cooldownMin=${discovery.circuitCooldownMinutesRemaining ?? 'n/a'} ` +
+      `consecutiveChallenges=${discovery.circuitConsecutiveChallenges} lastClass=${discovery.lastFailureClass ?? 'none'}`,
+  );
+  const runs = report.ingestRunHealth;
+  console.log(
+    `Ingest runs: activeStuck=${runs.activeStuckRuns} totalStuck=${runs.stuckRuns} staleClosed=${runs.staleClosedRuns}`,
   );
 }
 
@@ -1034,6 +1183,7 @@ type AggregateSections = Pick<
   | 'parseWarningSummary'
   | 'warningDistribution'
   | 'ingestRunHealth'
+  | 'discoveryHealth'
   | 'childSanity'
 >;
 
@@ -1053,6 +1203,7 @@ async function fetchAggregateSections(): Promise<AggregateSections> {
     parseWarningSummary,
     warningDistribution,
     ingestRunHealth,
+    discoveryHealth,
     childSanity,
   ] = await Promise.all([
     getStatusOverview(),
@@ -1067,6 +1218,7 @@ async function fetchAggregateSections(): Promise<AggregateSections> {
     getParseWarningSummary(),
     getWarningDistribution(),
     getIngestRunHealth(),
+    getDiscoveryHealth(),
     getChildSanity(),
   ]);
   return {
@@ -1082,6 +1234,7 @@ async function fetchAggregateSections(): Promise<AggregateSections> {
     parseWarningSummary,
     warningDistribution,
     ingestRunHealth,
+    discoveryHealth,
     childSanity,
   };
 }

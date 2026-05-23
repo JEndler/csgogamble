@@ -1,13 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { handleRequestMock, tryAcquireCrawlLockMock, releaseCrawlLockMock, createIngestRunMock, finishIngestRunMock } =
-  vi.hoisted(() => ({
-    handleRequestMock: vi.fn(),
-    tryAcquireCrawlLockMock: vi.fn(),
-    releaseCrawlLockMock: vi.fn(),
-    createIngestRunMock: vi.fn(),
-    finishIngestRunMock: vi.fn(),
-  }));
+const {
+  handleRequestMock,
+  tryAcquireCrawlLockMock,
+  releaseCrawlLockMock,
+  createIngestRunMock,
+  finishIngestRunMock,
+  getBackfillCandidateForRunMock,
+  finalizeBackfillCandidateMock,
+  incrementBackfillCounterMock,
+  countOpenBackfillCandidatesMock,
+  setBackfillRunStatusMock,
+  evaluateCircuitMock,
+  recordFailureMock,
+  recordSuccessMock,
+} = vi.hoisted(() => ({
+  handleRequestMock: vi.fn(),
+  tryAcquireCrawlLockMock: vi.fn(),
+  releaseCrawlLockMock: vi.fn(),
+  createIngestRunMock: vi.fn(),
+  finishIngestRunMock: vi.fn(),
+  getBackfillCandidateForRunMock: vi.fn(),
+  finalizeBackfillCandidateMock: vi.fn(),
+  incrementBackfillCounterMock: vi.fn(),
+  countOpenBackfillCandidatesMock: vi.fn(),
+  setBackfillRunStatusMock: vi.fn(),
+  evaluateCircuitMock: vi.fn(),
+  recordFailureMock: vi.fn(),
+  recordSuccessMock: vi.fn(),
+}));
 
 vi.mock('../src/app', () => ({
   handleRequest: handleRequestMock,
@@ -18,7 +39,22 @@ vi.mock('../src/db', () => ({
   releaseCrawlLock: releaseCrawlLockMock,
   createIngestRun: createIngestRunMock,
   finishIngestRun: finishIngestRunMock,
+  getBackfillCandidateForRun: getBackfillCandidateForRunMock,
+  finalizeBackfillCandidate: finalizeBackfillCandidateMock,
+  incrementBackfillCounter: incrementBackfillCounterMock,
+  countOpenBackfillCandidates: countOpenBackfillCandidatesMock,
+  setBackfillRunStatus: setBackfillRunStatusMock,
 }));
+
+vi.mock('../src/circuit', async () => {
+  const actual = await vi.importActual<typeof import('../src/circuit')>('../src/circuit');
+  return {
+    ...actual,
+    evaluateCircuit: evaluateCircuitMock,
+    recordFailure: recordFailureMock,
+    recordSuccess: recordSuccessMock,
+  };
+});
 
 import {
   buildIngestMatchMessages,
@@ -54,10 +90,37 @@ describe('queue orchestration helpers', () => {
     releaseCrawlLockMock.mockReset();
     createIngestRunMock.mockReset();
     finishIngestRunMock.mockReset();
+    getBackfillCandidateForRunMock.mockReset();
+    finalizeBackfillCandidateMock.mockReset();
+    incrementBackfillCounterMock.mockReset();
+    countOpenBackfillCandidatesMock.mockReset();
+    setBackfillRunStatusMock.mockReset();
+    evaluateCircuitMock.mockReset();
+    recordFailureMock.mockReset();
+    recordSuccessMock.mockReset();
     tryAcquireCrawlLockMock.mockResolvedValue(true);
     releaseCrawlLockMock.mockResolvedValue(undefined);
     createIngestRunMock.mockResolvedValue(101);
     finishIngestRunMock.mockResolvedValue(undefined);
+    getBackfillCandidateForRunMock.mockResolvedValue(null);
+    finalizeBackfillCandidateMock.mockResolvedValue(true);
+    incrementBackfillCounterMock.mockResolvedValue(undefined);
+    countOpenBackfillCandidatesMock.mockResolvedValue(1);
+    setBackfillRunStatusMock.mockResolvedValue(undefined);
+    evaluateCircuitMock.mockResolvedValue({
+      open: false,
+      cooldownRemainingMs: 0,
+      state: {
+        consecutiveChallenges: 0,
+        lastFailureClass: null,
+        lastFailureMessage: null,
+        openedAtMs: null,
+        cooldownUntilMs: null,
+        updatedAtMs: 0,
+      },
+    });
+    recordFailureMock.mockResolvedValue(undefined);
+    recordSuccessMock.mockResolvedValue(undefined);
   });
 
   it('creates and parses a discover-results queue message', () => {
@@ -228,6 +291,211 @@ describe('queue orchestration helpers', () => {
     expect(handleRequestMock).not.toHaveBeenCalled();
     expect(releaseCrawlLockMock).not.toHaveBeenCalled();
     expect((batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn> }).ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips scheduled discovery when the circuit is open', async () => {
+    evaluateCircuitMock.mockResolvedValueOnce({
+      open: true,
+      cooldownRemainingMs: 12 * 60_000,
+      state: {
+        consecutiveChallenges: 3,
+        lastFailureClass: 'challenge',
+        lastFailureMessage: 'cf challenge',
+        openedAtMs: 1,
+        cooldownUntilMs: 12 * 60_000,
+        updatedAtMs: 1,
+      },
+    });
+
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-circuit-open',
+        source: 'cron:*/15 * * * *',
+        maxMatches: 20,
+      }),
+    ]);
+
+    await processQueueBatch(batch, {
+      INGESTION_QUEUE: { sendBatch: vi.fn() },
+    } as unknown as Env);
+
+    expect(handleRequestMock).not.toHaveBeenCalled();
+    expect(tryAcquireCrawlLockMock).not.toHaveBeenCalled();
+    expect(createIngestRunMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'scheduled-discovery',
+      'cron-circuit-open',
+      'skipped_circuit_open',
+      expect.stringContaining('Circuit open'),
+      'challenge',
+    );
+    expect((batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn> }).ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a challenge failure and acks instead of retrying when discovery is challenged', async () => {
+    handleRequestMock.mockResolvedValueOnce(
+      jsonResponse({ ok: false, error: 'HLTV results discovery hit a Cloudflare challenge page' }, 503),
+    );
+
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-challenge',
+        source: 'cron:*/15 * * * *',
+        maxMatches: 20,
+      }),
+    ]);
+
+    await processQueueBatch(batch, {
+      INGESTION_QUEUE: { sendBatch: vi.fn() },
+    } as unknown as Env);
+
+    expect(recordFailureMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'challenge',
+      expect.stringContaining('Cloudflare challenge'),
+      expect.objectContaining({ key: expect.any(String) }),
+    );
+    expect(finishIngestRunMock).toHaveBeenCalledWith(
+      expect.anything(),
+      101,
+      'challenge',
+      expect.stringContaining('Cloudflare challenge'),
+      'challenge',
+    );
+    const message = batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn>; retry: ReturnType<typeof vi.fn> };
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(recordSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it('records circuit success after a clean scheduled discovery', async () => {
+    handleRequestMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          pageUrl: 'https://www.hltv.org/results',
+          discovered: 1,
+          matchUrls: ['https://www.hltv.org/matches/789/foo-vs-bar'],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true, fetchedAt: 'now', parsed: {}, artifact: null, notes: [] }));
+
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        acquisitionMode: 'browser-session',
+        browserSessionKey: 'cron-ok',
+        source: 'cron:*/15 * * * *',
+        maxMatches: 1,
+      }),
+    ]);
+
+    await processQueueBatch(batch, {
+      INGESTION_QUEUE: { sendBatch: vi.fn() },
+    } as unknown as Env);
+
+    expect(recordSuccessMock).toHaveBeenCalledTimes(1);
+    expect(recordFailureMock).not.toHaveBeenCalled();
+    expect(finishIngestRunMock).toHaveBeenCalledWith(
+      expect.anything(),
+      101,
+      'success',
+      expect.stringContaining('Discovered 1 matches'),
+    );
+  });
+
+  it('skips duplicate terminal backfill deliveries before re-ingesting', async () => {
+    getBackfillCandidateForRunMock.mockResolvedValueOnce({
+      id: 7,
+      runId: 42,
+      hltvMatchId: 123,
+      sourceUrl: 'https://www.hltv.org/matches/123/_',
+      state: 'parsed',
+      failureClass: null,
+      attempts: 1,
+      lastAttemptAt: 'now',
+      finishedAt: 'now',
+      message: null,
+    });
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        backfillRunId: 42,
+        backfillCandidateId: 7,
+      }),
+    ]);
+
+    await processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env);
+
+    expect(handleRequestMock).not.toHaveBeenCalled();
+    expect(finalizeBackfillCandidateMock).not.toHaveBeenCalled();
+    expect((batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn> }).ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries unknown backfill ingest failures without terminalizing the candidate', async () => {
+    getBackfillCandidateForRunMock.mockResolvedValueOnce({
+      id: 7,
+      runId: 42,
+      hltvMatchId: 123,
+      sourceUrl: 'https://www.hltv.org/matches/123/_',
+      state: 'enqueued',
+      failureClass: null,
+      attempts: 1,
+      lastAttemptAt: 'now',
+      finishedAt: null,
+      message: null,
+    });
+    handleRequestMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'transient weird failure' }, 500));
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        backfillRunId: 42,
+        backfillCandidateId: 7,
+      }),
+    ]);
+
+    await expect(
+      processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env),
+    ).rejects.toThrow('transient weird failure');
+
+    expect(finalizeBackfillCandidateMock).not.toHaveBeenCalled();
+    expect(incrementBackfillCounterMock).not.toHaveBeenCalled();
+    expect((batch.messages[0] as unknown as { retry: ReturnType<typeof vi.fn> }).retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes classified backfill challenge failures and acks the message', async () => {
+    getBackfillCandidateForRunMock.mockResolvedValueOnce({
+      id: 7,
+      runId: 42,
+      hltvMatchId: 123,
+      sourceUrl: 'https://www.hltv.org/matches/123/_',
+      state: 'enqueued',
+      failureClass: null,
+      attempts: 1,
+      lastAttemptAt: 'now',
+      finishedAt: null,
+      message: null,
+    });
+    handleRequestMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Cloudflare challenge page' }, 503));
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        backfillRunId: 42,
+        backfillCandidateId: 7,
+      }),
+    ]);
+
+    await processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env);
+
+    expect(finalizeBackfillCandidateMock).toHaveBeenCalledWith(expect.anything(), 7, 'challenge', expect.any(Object));
+    expect(incrementBackfillCounterMock).toHaveBeenCalledWith(expect.anything(), 42, 'challenge', 1);
+    const message = batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn>; retry: ReturnType<typeof vi.fn> };
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
   });
 
   it('rejects malformed queue messages', () => {

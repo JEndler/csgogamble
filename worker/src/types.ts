@@ -12,6 +12,14 @@ export interface DiscoverQueueMessage {
     acquisitionMode?: AcquisitionMode;
     browserSessionKey?: string;
     maxMatches?: number;
+    /**
+     * Canary discoveries open the discovery circuit on the very first challenge
+     * (threshold=1) and, on success, enqueue a follow-up fan-out discovery
+     * sized by `followupMaxMatches`. This keeps a single bad cron tick from
+     * fanning out into a full per-match acquisition storm.
+     */
+    canary?: boolean;
+    followupMaxMatches?: number;
   };
 }
 
@@ -25,6 +33,11 @@ export interface IngestMatchQueueMessage {
     source?: string;
     acquisitionMode?: AcquisitionMode;
     browserSessionKey?: string;
+    /** Optional backfill bookkeeping: when present, the consumer finalizes the
+     * candidate row after the ingest call completes (parsed, partial, challenge,
+     * skipped, or failed_classified). */
+    backfillRunId?: number;
+    backfillCandidateId?: number;
   };
 }
 
@@ -39,6 +52,7 @@ export interface Env {
   BROWSER_SESSION: DurableObjectNamespace;
   HLTV_BASE_URL: string;
   INGESTION_QUEUE: Queue<WorkerQueueMessage>;
+  ADMIN_TOKEN?: string;
 }
 
 /** Input body for `/ingest/match`. */

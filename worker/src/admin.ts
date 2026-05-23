@@ -50,7 +50,17 @@ function readJsonBody<T>(payload: unknown): T {
 }
 
 function readAcquisitionMode(value: unknown): AcquisitionMode {
-  if (value === 'http' || value === 'browser' || value === 'browser-session') return value;
+  if (
+    value === 'http' ||
+    value === 'http-stealth' ||
+    value === 'browser' ||
+    value === 'browser-native' ||
+    value === 'browser-stealth' ||
+    value === 'browser-session' ||
+    value === 'browser-session-stealth'
+  ) {
+    return value;
+  }
   return 'browser-session';
 }
 

@@ -56,8 +56,9 @@ Operator health:
 Worker-native acquisition/backfill:
 
 - `npm run backfill:daemon -- --list-only --filter partial --max 50` — list candidates only; no acquisition
-- `npm run backfill:daemon -- --apply --filter partial --max 50 --batch-size 10 --concurrency 1 --acquisition-mode browser-session` — 50-match canary through deployed Worker/admin endpoints
-- `npm run backfill:daemon -- --apply --resume --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode browser-session` — resume an interrupted run
+- `npm run backfill:daemon -- --apply --filter partial --max 50 --batch-size 10 --concurrency 1 --acquisition-mode http-stealth` — 50-match canary through deployed Worker/admin endpoints using the current winning HLTV mode
+- `npm run canary:acquisition -- --modes http-stealth,browser-native,browser-stealth,browser-session-stealth --repetitions 1` — compare acquisition modes without mutating match rows; `http-stealth` currently returns parseable HLTV HTML while Browser Rendering modes receive hard `Just a moment...` challenges
+- `npm run backfill:daemon -- --apply --resume --run-id <run-id> --batch-size 10 --concurrency 1 --acquisition-mode http-stealth` — resume an interrupted run
 - `npm run ops:canary` — canary alias
 - `npm run ops:resume -- --run-id <run-id>` — resume alias
 
@@ -83,7 +84,7 @@ Production-like acquisition must go through the deployed Worker / Cloudflare Bro
 
 ## Notes
 
-- HLTV blocks plain HTTP fetches often enough that acquisition strategy remains the hard part.
+- HLTV currently challenges Cloudflare Browser Rendering with hard `Just a moment...` pages. Worker fetch plus browser-shaped headers (`http-stealth`) currently returns parseable HTML even though normal HLTV pages include soft `/cdn-cgi/challenge-platform/` script references.
 - Browser Rendering is now wired as a small spike only; it returns compact JSON summaries instead of raw HTML.
 - The current production shape aims to keep acquisition separate from parsing and persistence.
 - Some match pages legitimately do not expose player stats sections. Those remain `partial`.

@@ -70,7 +70,15 @@ function readOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function readOptionalAcquisitionMode(value: unknown): AcquisitionMode | undefined {
-  return value === 'http' || value === 'browser' || value === 'browser-session' ? value : undefined;
+  return value === 'http' ||
+    value === 'http-stealth' ||
+    value === 'browser' ||
+    value === 'browser-native' ||
+    value === 'browser-stealth' ||
+    value === 'browser-session' ||
+    value === 'browser-session-stealth'
+    ? value
+    : undefined;
 }
 
 /** Convert an unknown payload into a validated match-ingest request. */

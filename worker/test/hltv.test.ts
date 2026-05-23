@@ -5,6 +5,11 @@ describe('hltv parsing helpers', () => {
   it('detects Cloudflare challenge pages', () => {
     expect(isCloudflareChallenge('<title>Just a moment...</title>')).toBe(true);
     expect(isCloudflareChallenge('<html><body>real page</body></html>')).toBe(false);
+    expect(
+      isCloudflareChallenge(
+        '<html><script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script><body>real page</body></html>',
+      ),
+    ).toBe(false);
   });
 
   it('discovers unique match URLs from results html', () => {

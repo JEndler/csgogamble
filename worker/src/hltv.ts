@@ -47,21 +47,27 @@ export function buildResultsUrl(baseUrl: string, request: DiscoverRequest): stri
 
 // ── Challenge detection ─────────────────────────────────────────────────────
 
-const CLOUDFLARE_CHALLENGE_MARKERS = [
+const HARD_CLOUDFLARE_CHALLENGE_MARKERS = [
   'Just a moment...',
   'Enable JavaScript and cookies to continue',
   'Attention Required! | Cloudflare',
-  '/cdn-cgi/challenge-platform/',
   'cf-browser-verification',
-  'challenge-platform',
 ];
+
+const SOFT_CLOUDFLARE_CHALLENGE_MARKERS = ['/cdn-cgi/challenge-platform/', 'challenge-platform'];
+
+const CLOUDFLARE_CHALLENGE_MARKERS = [...HARD_CLOUDFLARE_CHALLENGE_MARKERS, ...SOFT_CLOUDFLARE_CHALLENGE_MARKERS];
 
 export function findCloudflareChallengeMarkers(html: string): string[] {
   return CLOUDFLARE_CHALLENGE_MARKERS.filter((marker) => html.includes(marker));
 }
 
+export function findHardCloudflareChallengeMarkers(html: string): string[] {
+  return HARD_CLOUDFLARE_CHALLENGE_MARKERS.filter((marker) => html.includes(marker));
+}
+
 export function isCloudflareChallenge(html: string): boolean {
-  return findCloudflareChallengeMarkers(html).length > 0;
+  return findHardCloudflareChallengeMarkers(html).length > 0;
 }
 
 // ── Low-level regex helpers ─────────────────────────────────────────────────

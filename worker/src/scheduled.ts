@@ -33,7 +33,7 @@ export async function enqueueScheduledDiscovery(env: Env, controller: ScheduledC
   await enqueueMessages(env, [
     createDiscoverResultsMessage({
       source: `cron:${controller.cron}`,
-      acquisitionMode: 'browser-session',
+      acquisitionMode: 'http-stealth',
       browserSessionKey: `cron-${controller.scheduledTime}`,
       maxMatches: CANARY_MAX_MATCHES,
       canary: true,

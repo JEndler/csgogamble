@@ -1,6 +1,13 @@
 import type { MatchStatus } from './contracts';
 
-export type AcquisitionMode = 'http' | 'browser' | 'browser-session';
+export type AcquisitionMode =
+  | 'http'
+  | 'http-stealth'
+  | 'browser'
+  | 'browser-native'
+  | 'browser-stealth'
+  | 'browser-session'
+  | 'browser-session-stealth';
 
 export interface DiscoverQueueMessage {
   type: 'discover-results';

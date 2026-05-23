@@ -75,6 +75,8 @@ Run from `worker/` before committing code changes:
 npm run check
 npm test
 npm run duplicate-check
+npm run reparse:raw-html -- --limit 10
+npm run reparse:raw-html -- --apply --resume --limit 25 --batch-size 5
 ```
 
 `npm run check` includes TypeScript and Biome. Biome is intentionally strict. Fix warnings instead of weakening rules unless there is a strong documented reason.

@@ -1,18 +1,13 @@
-import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { promisify } from 'node:util';
 import { PARSER_VERSION } from '../src/constants';
 import { parseMatchHtml } from '../src/hltv';
 import type { ParsedMatch } from '../src/types';
+import { executeD1, isRecord, queryD1, sqlString, toNullableString, toNumber, wrangler } from './ops-utils';
 
-const execFileAsync = promisify(execFile);
 const DEFAULT_LIMIT = 25;
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_CHECKPOINT_KEY = 'reparse_raw_html_checkpoint';
 const DEFAULT_WORKER_URL = 'https://csgogamble-worker.jakob-ad5.workers.dev';
 const RAW_HTML_BUCKET = 'csgogamble-raw';
-const D1_DATABASE = 'csgogamble';
-const WRANGLER_MAX_BUFFER = 25 * 1024 * 1024;
 
 type Decision = 'apply' | 'skip_challenge' | 'skip_no_improvement' | 'skip_regression' | 'error';
 
@@ -124,71 +119,6 @@ function parseArgs(): Options {
     forceRegressions: args.includes('--force-regressions'),
     json: args.includes('--json'),
   };
-}
-
-function loadCloudflareEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  if (!existsSync('.dev.vars')) return env;
-
-  const lines = readFileSync('.dev.vars', 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const separator = trimmed.indexOf('=');
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    const value = trimmed
-      .slice(separator + 1)
-      .trim()
-      .replace(/^['"]|['"]$/g, '');
-    env[key] = env[key] ?? value;
-  }
-
-  env.CLOUDFLARE_API_TOKEN = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;
-  env.CLOUDFLARE_ACCOUNT_ID = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
-  return env;
-}
-
-const cloudflareEnv = loadCloudflareEnv();
-
-async function wrangler(args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync('npx', ['wrangler', ...args], {
-    encoding: 'utf8',
-    env: cloudflareEnv,
-    maxBuffer: WRANGLER_MAX_BUFFER,
-  });
-  return stdout;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function toNumber(value: unknown): number {
-  return typeof value === 'number' ? value : Number(value ?? 0);
-}
-
-function toNullableString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function sqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function parseD1Rows<T>(output: string, mapper: (row: Record<string, unknown>) => T): T[] {
-  const parsed: unknown = JSON.parse(output);
-  if (!Array.isArray(parsed) || !isRecord(parsed[0]) || !Array.isArray(parsed[0].results)) return [];
-  return parsed[0].results.filter(isRecord).map(mapper);
-}
-
-async function queryD1<T>(sql: string, mapper: (row: Record<string, unknown>) => T): Promise<T[]> {
-  const output = await wrangler(['d1', 'execute', D1_DATABASE, '--remote', '--json', '--command', sql]);
-  return parseD1Rows(output, mapper);
-}
-
-async function executeD1(sql: string): Promise<void> {
-  await wrangler(['d1', 'execute', D1_DATABASE, '--remote', '--command', sql]);
 }
 
 function mapCoverage(row: Record<string, unknown>): CoverageRow {

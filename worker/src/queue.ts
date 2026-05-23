@@ -105,69 +105,65 @@ export function buildIngestMatchMessages(
   );
 }
 
+function parseDiscoverPayload(payload: Record<string, unknown>): DiscoverQueueMessage {
+  const message = createDiscoverResultsMessage({
+    pageUrl: readOptionalString(payload.pageUrl),
+    html: readOptionalString(payload.html),
+    persistHtml: readOptionalBoolean(payload.persistHtml),
+    source: readOptionalString(payload.source),
+    acquisitionMode: readOptionalAcquisitionMode(payload.acquisitionMode),
+    browserSessionKey: readOptionalString(payload.browserSessionKey),
+    maxMatches: readOptionalNumber(payload.maxMatches),
+  });
+
+  if (payload.pageUrl !== undefined && message.payload.pageUrl === undefined && payload.pageUrl !== null) {
+    throw new QueueMessageValidationError('Queue discovery job requires a string pageUrl when provided');
+  }
+
+  if (payload.html !== undefined && message.payload.html === undefined && payload.html !== null) {
+    throw new QueueMessageValidationError('Queue discovery job requires html to be a string when provided');
+  }
+
+  return message;
+}
+
+function parseIngestPayload(payload: Record<string, unknown>): IngestMatchQueueMessage {
+  const message = createIngestMatchMessage({
+    matchUrl: readOptionalString(payload.matchUrl),
+    matchId: readOptionalNumber(payload.matchId),
+    html: readOptionalString(payload.html),
+    persistHtml: readOptionalBoolean(payload.persistHtml),
+    source: readOptionalString(payload.source),
+    acquisitionMode: readOptionalAcquisitionMode(payload.acquisitionMode),
+    browserSessionKey: readOptionalString(payload.browserSessionKey),
+  });
+
+  if (!message.payload.matchUrl && message.payload.matchId === undefined) {
+    throw new QueueMessageValidationError('Queue ingest job requires either matchUrl or matchId');
+  }
+
+  if (payload.matchUrl !== undefined && message.payload.matchUrl === undefined && payload.matchUrl !== null) {
+    throw new QueueMessageValidationError('Queue ingest job requires matchUrl to be a string when provided');
+  }
+
+  if (payload.matchId !== undefined && message.payload.matchId === undefined && payload.matchId !== null) {
+    throw new QueueMessageValidationError('Queue ingest job requires matchId to be numeric when provided');
+  }
+
+  return message;
+}
+
 export function parseQueueMessage(payload: unknown): WorkerQueueMessage {
   if (!isRecord(payload) || typeof payload.type !== 'string' || !isRecord(payload.payload)) {
     throw new QueueMessageValidationError('Queue message must contain a type and payload object');
   }
 
   if (payload.type === 'discover-results') {
-    const message = createDiscoverResultsMessage({
-      pageUrl: readOptionalString(payload.payload.pageUrl),
-      html: readOptionalString(payload.payload.html),
-      persistHtml: readOptionalBoolean(payload.payload.persistHtml),
-      source: readOptionalString(payload.payload.source),
-      acquisitionMode: readOptionalAcquisitionMode(payload.payload.acquisitionMode),
-      browserSessionKey: readOptionalString(payload.payload.browserSessionKey),
-      maxMatches: readOptionalNumber(payload.payload.maxMatches),
-    });
-
-    if (
-      payload.payload.pageUrl !== undefined &&
-      message.payload.pageUrl === undefined &&
-      payload.payload.pageUrl !== null
-    ) {
-      throw new QueueMessageValidationError('Queue discovery job requires a string pageUrl when provided');
-    }
-
-    if (payload.payload.html !== undefined && message.payload.html === undefined && payload.payload.html !== null) {
-      throw new QueueMessageValidationError('Queue discovery job requires html to be a string when provided');
-    }
-
-    return message;
+    return parseDiscoverPayload(payload.payload);
   }
 
   if (payload.type === 'ingest-match') {
-    const message = createIngestMatchMessage({
-      matchUrl: readOptionalString(payload.payload.matchUrl),
-      matchId: readOptionalNumber(payload.payload.matchId),
-      html: readOptionalString(payload.payload.html),
-      persistHtml: readOptionalBoolean(payload.payload.persistHtml),
-      source: readOptionalString(payload.payload.source),
-      acquisitionMode: readOptionalAcquisitionMode(payload.payload.acquisitionMode),
-      browserSessionKey: readOptionalString(payload.payload.browserSessionKey),
-    });
-
-    if (!message.payload.matchUrl && message.payload.matchId === undefined) {
-      throw new QueueMessageValidationError('Queue ingest job requires either matchUrl or matchId');
-    }
-
-    if (
-      payload.payload.matchUrl !== undefined &&
-      message.payload.matchUrl === undefined &&
-      payload.payload.matchUrl !== null
-    ) {
-      throw new QueueMessageValidationError('Queue ingest job requires matchUrl to be a string when provided');
-    }
-
-    if (
-      payload.payload.matchId !== undefined &&
-      message.payload.matchId === undefined &&
-      payload.payload.matchId !== null
-    ) {
-      throw new QueueMessageValidationError('Queue ingest job requires matchId to be numeric when provided');
-    }
-
-    return message;
+    return parseIngestPayload(payload.payload);
   }
 
   throw new QueueMessageValidationError('Unsupported queue message type');
@@ -181,20 +177,97 @@ export async function enqueueMessages(env: Env, messages: readonly WorkerQueueMe
   await env.INGESTION_QUEUE.sendBatch(messages.map((body) => ({ body })));
 }
 
-async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): Promise<void> {
+async function dispatchInlineSessionIngest(
+  env: Env,
+  ingestMessages: readonly IngestMatchQueueMessage[],
+): Promise<number> {
+  let successCount = 0;
+  for (const ingestMessage of ingestMessages) {
+    // Sequential ingest is intentional: every message reuses the same browser session,
+    // which can only service one request at a time.
+    // biome-ignore lint/performance/noAwaitInLoops: shared browser session requires sequential dispatch
+    await processIngestMessage(env, ingestMessage);
+    successCount += 1;
+  }
+  return successCount;
+}
+
+async function runDiscovery(env: Env, message: DiscoverQueueMessage, runId: number): Promise<void> {
+  const response = await invokeEndpoint<DiscoverResultsResponse>(env, '/discover/results', {
+    pageUrl: message.payload.pageUrl,
+    html: message.payload.html,
+    acquisitionMode: message.payload.acquisitionMode,
+    browserSessionKey: message.payload.browserSessionKey,
+    maxMatches: message.payload.maxMatches,
+  });
+
+  const ingestMessages = buildIngestMatchMessages(response.matchUrls, {
+    persistHtml: message.payload.persistHtml,
+    source: message.payload.source,
+    acquisitionMode: message.payload.acquisitionMode,
+    browserSessionKey: message.payload.browserSessionKey,
+  });
+
+  if (message.payload.acquisitionMode === 'browser-session' && message.payload.browserSessionKey) {
+    const successCount = await dispatchInlineSessionIngest(env, ingestMessages);
+    if (runId) {
+      await finishIngestRun(
+        env,
+        runId,
+        'success',
+        `Discovered ${response.discovered} matches; ingested ${successCount} inline via shared browser session`,
+      );
+    }
+    return;
+  }
+
+  await enqueueMessages(env, ingestMessages);
+  if (runId) {
+    await finishIngestRun(
+      env,
+      runId,
+      'success',
+      `Discovered ${response.discovered} matches; enqueued ${ingestMessages.length} ingest jobs`,
+    );
+  }
+}
+
+interface DiscoverContext {
+  isScheduledRun: boolean;
+  runTarget: string | null;
+  lockToken: string | null;
+}
+
+function buildDiscoverContext(message: DiscoverQueueMessage): DiscoverContext {
   const isScheduledRun = message.payload.source?.startsWith('cron:') ?? false;
   const runTarget = message.payload.browserSessionKey ?? message.payload.pageUrl ?? null;
   const lockToken = isScheduledRun ? `${message.payload.browserSessionKey ?? 'cron'}:${Date.now()}` : null;
-  const lockAcquired = lockToken
-    ? await tryAcquireCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, lockToken, SCHEDULED_DISCOVER_LOCK_TTL_MS)
+  return { isScheduledRun, runTarget, lockToken };
+}
+
+async function startDiscoverRun(env: Env, message: DiscoverQueueMessage, context: DiscoverContext): Promise<number> {
+  if (!context.isScheduledRun) return 0;
+  return await createIngestRun(
+    env,
+    'scheduled-discovery',
+    context.runTarget,
+    'running',
+    `Starting scheduled discovery with maxMatches=${message.payload.maxMatches ?? 'default'}`,
+  );
+}
+
+async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): Promise<void> {
+  const context = buildDiscoverContext(message);
+  const lockAcquired = context.lockToken
+    ? await tryAcquireCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, context.lockToken, SCHEDULED_DISCOVER_LOCK_TTL_MS)
     : true;
 
   if (!lockAcquired) {
-    if (isScheduledRun) {
+    if (context.isScheduledRun) {
       await createIngestRun(
         env,
         'scheduled-discovery',
-        runTarget,
+        context.runTarget,
         'skipped',
         'Skipped because another scheduled discovery batch still holds the crawl lock',
       );
@@ -202,58 +275,10 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
     return;
   }
 
-  const runId = isScheduledRun
-    ? await createIngestRun(
-        env,
-        'scheduled-discovery',
-        runTarget,
-        'running',
-        `Starting scheduled discovery with maxMatches=${message.payload.maxMatches ?? 'default'}`,
-      )
-    : 0;
+  const runId = await startDiscoverRun(env, message, context);
 
   try {
-    const response = await invokeEndpoint<DiscoverResultsResponse>(env, '/discover/results', {
-      pageUrl: message.payload.pageUrl,
-      html: message.payload.html,
-      acquisitionMode: message.payload.acquisitionMode,
-      browserSessionKey: message.payload.browserSessionKey,
-      maxMatches: message.payload.maxMatches,
-    });
-
-    const ingestMessages = buildIngestMatchMessages(response.matchUrls, {
-      persistHtml: message.payload.persistHtml,
-      source: message.payload.source,
-      acquisitionMode: message.payload.acquisitionMode,
-      browserSessionKey: message.payload.browserSessionKey,
-    });
-
-    if (message.payload.acquisitionMode === 'browser-session' && message.payload.browserSessionKey) {
-      let successCount = 0;
-      for (const ingestMessage of ingestMessages) {
-        await processIngestMessage(env, ingestMessage);
-        successCount += 1;
-      }
-      if (runId) {
-        await finishIngestRun(
-          env,
-          runId,
-          'success',
-          `Discovered ${response.discovered} matches; ingested ${successCount} inline via shared browser session`,
-        );
-      }
-      return;
-    }
-
-    await enqueueMessages(env, ingestMessages);
-    if (runId) {
-      await finishIngestRun(
-        env,
-        runId,
-        'success',
-        `Discovered ${response.discovered} matches; enqueued ${ingestMessages.length} ingest jobs`,
-      );
-    }
+    await runDiscovery(env, message, runId);
   } catch (error) {
     if (runId) {
       const messageText = error instanceof Error ? error.message : String(error);
@@ -261,8 +286,8 @@ async function processDiscoverMessage(env: Env, message: DiscoverQueueMessage): 
     }
     throw error;
   } finally {
-    if (lockToken) {
-      await releaseCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, lockToken);
+    if (context.lockToken) {
+      await releaseCrawlLock(env, SCHEDULED_DISCOVER_LOCK_KEY, context.lockToken);
     }
   }
 }
@@ -284,11 +309,12 @@ export async function processQueueBatch(batch: MessageBatch<unknown>, env: Env):
   for (const message of batch.messages) {
     try {
       const queueMessage = parseQueueMessage(message.body);
-      if (queueMessage.type === 'discover-results') {
-        await processDiscoverMessage(env, queueMessage);
-      } else {
-        await processIngestMessage(env, queueMessage);
-      }
+      // Sequential processing is intentional: queue messages may share browser sessions
+      // or crawl locks, and parallel execution would corrupt that shared state.
+      // biome-ignore lint/performance/noAwaitInLoops: shared browser/lock state requires sequential processing
+      await (queueMessage.type === 'discover-results'
+        ? processDiscoverMessage(env, queueMessage)
+        : processIngestMessage(env, queueMessage));
       message.ack();
     } catch (error) {
       if (isQueueMessageValidationError(error)) {

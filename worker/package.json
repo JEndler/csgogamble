@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "backfill": "tsx scripts/backfill.ts",
     "reparse:raw-html": "tsx scripts/reparse-raw-html.ts",
+    "health:ingest": "tsx scripts/ingestion-health.ts",
     "benchmark:cloudflare": "tsx scripts/benchmark-cloudflare-browser.ts",
     "download-demo": "tsx scripts/download-demo.ts"
   },

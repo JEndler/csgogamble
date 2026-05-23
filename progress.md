@@ -2,12 +2,13 @@
 
 ## Current strategic sequence
 
-1. Reparse existing R2 raw HTML into the enriched schema.
-2. Build one-command ingestion health reporting.
-3. Make backfill daemon-grade for unattended multi-thousand-match runs.
-4. Design odds ingestion before writing the first market scraper.
-5. Add leakage-safe feature export v0.
-6. Burn down strict Biome warnings in focused refactor slices.
+1. Reparse existing R2 raw HTML into the enriched schema. Done.
+2. Build one-command ingestion health reporting. Done.
+3. Make acquisition reliable under repeated challenge / stale-run conditions.
+4. Make backfill daemon-grade for unattended multi-thousand-match runs.
+5. Design odds ingestion before writing the first market scraper.
+6. Add leakage-safe feature export v0.
+7. Burn down strict Biome warnings in focused refactor slices.
 
 ## Completed work: R2 artifact reparse
 
@@ -53,6 +54,7 @@ After replaying stored R2 raw HTML through the enriched parser:
 
 ## Completed
 
+- One-command ingestion health report: `worker/scripts/ingestion-health.ts` via `npm run health:ingest`.
 - R2 raw HTML reparse script: `worker/scripts/reparse-raw-html.ts`.
 - D1 migration for enriched match/map/player/veto/lineup/stream data.
 - Challenge-page handling so challenge rows do not poison parsed rows.
@@ -64,4 +66,4 @@ After replaying stored R2 raw HTML through the enriched parser:
 
 ## Notes
 
-Parser is production-usable. Acquisition is still the highest-risk boundary. The next highest leverage work is reprocessing stored artifacts because it improves data coverage without triggering anti-bot systems.
+Parser is production-usable. Acquisition is still the highest-risk boundary. Before scraping all old remaining matches, run `npm run health:ingest` and only scale if hard gates pass. Fix hard health failures first, then run a bounded canary batch, inspect health deltas, and only then increase volume.

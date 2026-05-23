@@ -32,6 +32,95 @@ Remaining cleanup:
 
 Goal: make acquisition scale predictably while respecting the hard boundary: no protected-source local scraping by default. Acquisition should run through deployed Workers / Cloudflare Browser Rendering; local work is limited to tests, D1/R2 inspection, parser replay, and docs.
 
+Success is operational reliability, not “we scraped more pages once.” Measure success across five gates:
+
+1. Challenge containment
+   - Primary metric: scheduled discovery challenge storm rate drops to near zero.
+   - Success:
+     - if HLTV challenges us, cron stops hammering within 1-2 failed canaries
+     - repeated cron ticks write `skipped_circuit_open` during cooldown, not endless error rows
+     - 24h scheduled-discovery challenge fan-out count is <= 2 per circuit event
+   - Failure:
+     - every 15-minute cron tick keeps creating `HLTV results discovery hit a Cloudflare challenge page` errors
+
+2. Acquisition throughput
+   - Primary metric: matches acquired per successful acquisition window.
+   - Success tiers:
+     - canary: 10 matches, zero worker crashes, health stays green
+     - small batch: 50 matches, >= 85% usable rows (`parsed + partial`), <= 5% challenge, 0 unclassified errors
+     - medium batch: 500 matches, resumes cleanly after interruption, no duplicate work
+     - production run: 2k+ candidates over multiple hours with bounded retries and no manual babysitting
+   - `partial` rows count as usable for initial volume because raw HTML is retained and metadata is often still useful.
+
+3. Data quality after acquisition
+   - Primary metric: enrichment coverage does not regress from the current baseline.
+   - Current baseline:
+     - parsed: 88.6%
+     - partial: 8.43%
+     - challenge: 2.97%
+     - error: 0%
+     - parser current: 99.88%
+     - raw artifact coverage: 97.86%
+     - maps/mapStats/aggStats/lineup: 100%
+     - vetoes: 99.87%
+     - streams: 93.16%
+   - Success after acquisition:
+     - error rate remains <= 1-2%
+     - challenge rate stays <= 5-8% over new rows
+     - raw HTML artifact coverage >= 98% for attempted acquisitions
+     - current parser coverage >= 99%
+     - parsed rows with maps/player stats remain >= 95%
+     - missing critical parsed fields remains 0, or every exception is explicitly understood
+   - Failure:
+     - volume increases but data quality is poisoned: missing teams, missing maps, no raw artifacts, stale parser versions, or high challenge/error rows
+
+4. Backfill daemon behavior
+   - Primary metric: runs are resumable and self-reporting.
+   - Success:
+     - every backfill has a run id
+     - every candidate ends in one terminal state: `parsed`, `partial`, `challenge`, `skipped`, or `failed_classified`
+     - SIGINT/crash/redeploy does not lose cursor
+     - resume does not duplicate work
+     - one bad browser/page/session does not kill the full run
+     - final summary includes attempted, succeeded, partial, challenged, failed by class, retried, skipped, final cursor, elapsed time, and health delta
+   - Failure:
+     - “It crashed somewhere around match 237, unclear what happened.”
+
+5. Operator health loop
+   - Primary metric: one command tells us whether to scale, pause, or repair.
+   - Success:
+     - preflight `npm run health:ingest` is green or gives a concrete blocker
+     - post-run health delta shows whether the batch improved coverage or caused regression
+     - stale runs are cleaned by `npm run ops:close-stale-runs`, not manual D1 SQL
+     - alerts stay silent when healthy and noisy only when action is required
+
+Concrete acceptance tests:
+
+- Phase A: circuit breaker
+  - Force or observe a challenge condition.
+  - Verify only 1-2 real acquisition attempts happen.
+  - Verify subsequent cron ticks create `skipped_circuit_open`, not error spam.
+  - Verify health reports discovery challenged / circuit open while parser/data health remains separately visible.
+
+- Phase B: 50-match canary
+  - Preflight health is green.
+  - Run Worker-native 50-match acquisition.
+  - Post-run checks:
+    - no stuck `ingest_runs`
+    - no unclassified errors
+    - raw artifact coverage >= 98% for attempted rows
+    - parsed + partial >= 85%
+    - challenge <= 8%
+    - health stays green or only emits expected challenge warning
+
+- Phase C: 500-match resumability test
+  - Start a 500-match run.
+  - Interrupt around mid-run.
+  - Resume.
+  - Verify no duplicate candidate processing, cursor advances correctly, terminal summary matches D1 counts, and no stale locks/runs are left open.
+
+If all three phases pass, acquisition is reliable enough to scale. If not, it is still a toy.
+
 ### 1.1 Stop repeated challenged scheduled discovery
 
 Problem observed: scheduled discovery is currently producing repeated `HLTV results discovery hit a Cloudflare challenge page` errors.

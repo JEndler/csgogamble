@@ -312,6 +312,53 @@ export interface RecordPriceHistoryManifestInput {
 }
 
 export async function recordPriceHistoryManifest(env: Env, input: RecordPriceHistoryManifestInput): Promise<void> {
+  const existing = await env.DB.prepare(
+    `SELECT id
+       FROM polymarket_price_history_manifests
+      WHERE token_id = ?1
+        AND interval = ?2
+        AND COALESCE(fidelity_minutes, -1) = COALESCE(?3, -1)
+        AND COALESCE(start_ts, '') = COALESCE(?4, '')
+        AND COALESCE(end_ts, '') = COALESCE(?5, '')
+      ORDER BY id ASC
+      LIMIT 1`,
+  )
+    .bind(input.tokenId, input.interval, input.fidelityMinutes, input.startTs, input.endTs)
+    .first<{ id: number }>();
+
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE polymarket_price_history_manifests
+          SET market_id = COALESCE(?2, market_id),
+              outcome_id = COALESCE(?3, outcome_id),
+              point_count = ?4,
+              raw_r2_key = COALESCE(?5, raw_r2_key),
+              series_r2_key = COALESCE(?6, series_r2_key),
+              raw_byte_size = COALESCE(?7, raw_byte_size),
+              series_byte_size = COALESCE(?8, series_byte_size),
+              checksum_sha256 = COALESCE(?9, checksum_sha256),
+              status = ?10,
+              message = ?11,
+              fetched_at = CURRENT_TIMESTAMP
+        WHERE id = ?1`,
+    )
+      .bind(
+        existing.id,
+        input.marketId,
+        input.outcomeId,
+        input.pointCount,
+        input.rawR2Key,
+        input.seriesR2Key,
+        input.rawByteSize,
+        input.seriesByteSize,
+        input.checksumSha256,
+        input.status ?? 'stored',
+        input.message ?? null,
+      )
+      .run();
+    return;
+  }
+
   await env.DB.prepare(
     `INSERT INTO polymarket_price_history_manifests
         (market_id, outcome_id, token_id, interval, fidelity_minutes,
@@ -321,20 +368,7 @@ export async function recordPriceHistoryManifest(env: Env, input: RecordPriceHis
        VALUES (?1, ?2, ?3, ?4, ?5,
                ?6, ?7, ?8,
                ?9, ?10, ?11, ?12,
-               ?13, ?14, ?15)
-       ON CONFLICT(token_id, interval, start_ts, end_ts) DO UPDATE SET
-         market_id = COALESCE(excluded.market_id, polymarket_price_history_manifests.market_id),
-         outcome_id = COALESCE(excluded.outcome_id, polymarket_price_history_manifests.outcome_id),
-         fidelity_minutes = COALESCE(excluded.fidelity_minutes, polymarket_price_history_manifests.fidelity_minutes),
-         point_count = excluded.point_count,
-         raw_r2_key = COALESCE(excluded.raw_r2_key, polymarket_price_history_manifests.raw_r2_key),
-         series_r2_key = COALESCE(excluded.series_r2_key, polymarket_price_history_manifests.series_r2_key),
-         raw_byte_size = COALESCE(excluded.raw_byte_size, polymarket_price_history_manifests.raw_byte_size),
-         series_byte_size = COALESCE(excluded.series_byte_size, polymarket_price_history_manifests.series_byte_size),
-         checksum_sha256 = COALESCE(excluded.checksum_sha256, polymarket_price_history_manifests.checksum_sha256),
-         status = excluded.status,
-         message = excluded.message,
-         fetched_at = CURRENT_TIMESTAMP`,
+               ?13, ?14, ?15)`,
   )
     .bind(
       input.marketId,

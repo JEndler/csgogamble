@@ -9,20 +9,25 @@ export const D1_DATABASE = 'csgogamble';
 
 export function loadCloudflareEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
-  if (!existsSync('.dev.vars')) return env;
+  for (const filePath of ['.env', '.dev.vars']) {
+    if (!existsSync(filePath)) continue;
 
-  const lines = readFileSync('.dev.vars', 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const separator = trimmed.indexOf('=');
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    const value = trimmed
-      .slice(separator + 1)
-      .trim()
-      .replace(/^['"]|['"]$/g, '');
-    env[key] = env[key] ?? value;
+    const lines = readFileSync(filePath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const separator = trimmed.indexOf('=');
+      if (separator <= 0) continue;
+      const key = trimmed
+        .slice(0, separator)
+        .trim()
+        .replace(/^export\s+/, '');
+      const value = trimmed
+        .slice(separator + 1)
+        .trim()
+        .replace(/^['"]|['"]$/g, '');
+      env[key] = env[key] ?? value;
+    }
   }
 
   env.CLOUDFLARE_API_TOKEN = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;

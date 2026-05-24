@@ -22,6 +22,7 @@ export interface HealthResponse {
   service: 'csgogamble-worker';
   hasRawHtmlBucket: boolean;
   hasDemoBucket: boolean;
+  hasPolymarketDataBucket: boolean;
 }
 
 /** Successful response for `/discover/results`. */

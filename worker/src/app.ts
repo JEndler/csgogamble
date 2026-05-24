@@ -16,6 +16,11 @@ import {
 } from './contracts';
 import { handleDiscoverResults, handleIngestMatch, handleRecordDemo } from './handlers';
 import { errorResponse, jsonResponse } from './http-response';
+import {
+  handlePolymarketGammaRun,
+  handlePolymarketPriceHistoryRun,
+  handlePolymarketStatus,
+} from './polymarket/handlers';
 import type { Env } from './types';
 
 function notFound(): Response {
@@ -31,8 +36,29 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       service: 'csgogamble-worker',
       hasRawHtmlBucket: Boolean(env.RAW_HTML),
       hasDemoBucket: Boolean(env.DEMOS),
+      hasPolymarketDataBucket: Boolean(env.POLYMARKET_DATA),
     };
     return jsonResponse(response);
+  }
+
+  if (request.method === 'GET' && url.pathname === '/admin/polymarket/status') {
+    return handlePolymarketStatus(request, env);
+  }
+
+  if (request.method === 'POST' && url.pathname === '/admin/polymarket/gamma/run') {
+    try {
+      return await handlePolymarketGammaRun(request, env);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Invalid Polymarket gamma request', 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/admin/polymarket/price-history/run') {
+    try {
+      return await handlePolymarketPriceHistoryRun(request, env);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Invalid Polymarket price-history request', 400);
+    }
   }
 
   if (request.method === 'GET' && url.pathname === '/debug/browser/results') {

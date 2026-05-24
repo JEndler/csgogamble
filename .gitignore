@@ -7,6 +7,10 @@ worker/node_modules/
 # Cloudflare local state
 .wrangler/
 worker/.wrangler/
+.env
+.env.*
+worker/.env
+worker/.env.*
 worker/.dev.vars
 *.dev.vars
 

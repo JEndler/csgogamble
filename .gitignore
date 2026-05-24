@@ -31,6 +31,8 @@ venv/
 # Logs and temp artifacts
 *.log
 /tmp/
+worker/.polymarket-backfill/
+worker/logs/
 
 # Legacy local artifacts
 archive/python-legacy/.venv/

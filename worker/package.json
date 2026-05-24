@@ -24,6 +24,7 @@
     "ops:close-stale-runs": "tsx scripts/close-stale-runs.ts",
     "benchmark:cloudflare": "tsx scripts/benchmark-cloudflare-browser.ts",
     "download-demo": "tsx scripts/download-demo.ts",
+    "polymarket:backfill": "tsx scripts/polymarket-backfill-daemon.ts",
     "polymarket:canary": "tsx scripts/polymarket-canary.ts",
     "polymarket:worker": "tsx scripts/polymarket-worker-run.ts",
     "health:polymarket": "tsx scripts/polymarket-health.ts"

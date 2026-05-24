@@ -19,6 +19,8 @@ import type { MarketType, RawGammaEvent } from './types';
 export interface GammaIngestInput {
   runId?: number;
   cursor?: string | null;
+  offset?: number;
+  pagination?: 'keyset' | 'offset';
   pageIndex?: number;
   maxPages?: number;
   pageLimit?: number;
@@ -177,14 +179,23 @@ export async function runGammaIngest(env: Env, input: GammaIngestInput): Promise
   const maxPages = clampInt(input.maxPages, 1, 1, 10);
   const pageLimit = clampInt(input.pageLimit, 100, 1, 500);
   const tagId = clampInt(input.tagId, GAMMA_CS2_TAG_ID, 1, Number.MAX_SAFE_INTEGER);
+  const pagination = input.pagination ?? 'keyset';
   let cursor = input.cursor ?? null;
+  let offset = clampInt(input.offset, 0, 0, Number.MAX_SAFE_INTEGER);
   let pageIndex = clampInt(input.pageIndex, 0, 0, Number.MAX_SAFE_INTEGER);
   const runId =
     input.runId ??
     (await createPolymarketCrawlRun(env, {
       runType: 'gamma_events',
       target: cursor,
-      optionsJson: JSON.stringify({ maxPages, pageLimit, tagId, closed: input.closed, archived: input.archived }),
+      optionsJson: JSON.stringify({
+        maxPages,
+        pageLimit,
+        tagId,
+        closed: input.closed,
+        archived: input.archived,
+        pagination,
+      }),
     }));
 
   const result: GammaIngestResult = {
@@ -206,12 +217,14 @@ export async function runGammaIngest(env: Env, input: GammaIngestInput): Promise
       // biome-ignore lint/performance/noAwaitInLoops: Gamma keyset pagination is sequential.
       const response = await fetchGammaEvents({
         cursor,
+        offset,
+        pagination,
         limit: pageLimit,
         tagId,
         closed: input.closed,
         archived: input.archived,
       });
-      const events = eventItems(response.parsed);
+      const events = Array.isArray(response.parsed) ? response.parsed : eventItems(response.parsed);
       const artifact = await putPolymarketTextArtifact(
         env.POLYMARKET_DATA,
         gammaPageKey(cursor),
@@ -236,11 +249,17 @@ export async function runGammaIngest(env: Env, input: GammaIngestInput): Promise
       await bumpPolymarketRunCounter(env, runId, 'pages_fetched', 1);
       // biome-ignore lint/performance/noAwaitInLoops: serialized persistence protects D1.
       await persistGammaEvents(env, runId, events, artifact.key, result);
-      cursor = response.parsed.next_cursor ?? null;
+      cursor = pagination === 'offset' ? `offset:${offset + pageLimit}` : (response.parsed.next_cursor ?? null);
+      offset += pageLimit;
       pageIndex += 1;
       result.nextCursor = cursor;
       result.nextPageIndex = pageIndex;
-      if (!cursor || cursor === TERMINAL_CURSOR || events.length === 0) {
+      if (
+        !cursor ||
+        cursor === TERMINAL_CURSOR ||
+        events.length === 0 ||
+        (pagination === 'offset' && events.length < pageLimit)
+      ) {
         result.done = true;
         break;
       }

@@ -275,6 +275,8 @@ async function runGamma(args: Args): Promise<void> {
       const result = await invokeWorker<GammaResult>('/admin/polymarket/gamma/run', {
         runId: checkpoint.runId,
         cursor: checkpoint.cursor,
+        offset: checkpoint.pageIndex * checkpoint.pageLimit,
+        pagination: 'offset',
         pageIndex: checkpoint.pageIndex,
         maxPages: checkpoint.maxPagesPerCall,
         pageLimit: checkpoint.pageLimit,

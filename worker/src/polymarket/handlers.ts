@@ -39,6 +39,8 @@ function parseGammaBody(payload: unknown): GammaIngestInput {
   return {
     runId: readNumber(payload.runId),
     cursor: payload.cursor === null ? null : readString(payload.cursor),
+    offset: readNumber(payload.offset),
+    pagination: readString(payload.pagination) as GammaIngestInput['pagination'],
     pageIndex: readNumber(payload.pageIndex),
     maxPages: readNumber(payload.maxPages),
     pageLimit: readNumber(payload.pageLimit),

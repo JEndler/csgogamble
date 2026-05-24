@@ -104,6 +104,8 @@ async function fetchJson<T>(url: string, options: PolymarketFetchOptions = {}): 
 export interface FetchGammaEventsOptions extends PolymarketFetchOptions {
   baseUrl?: string;
   cursor?: string | null;
+  offset?: number;
+  pagination?: 'keyset' | 'offset';
   tagId?: number;
   limit?: number;
   archived?: boolean;
@@ -116,10 +118,14 @@ export function buildGammaEventsUrl(options: FetchGammaEventsOptions = {}): stri
   const params = new URLSearchParams();
   params.set('tag_id', String(options.tagId ?? GAMMA_CS2_TAG_ID));
   params.set('limit', String(limit));
-  if (options.cursor) params.set('next_cursor', options.cursor);
+  if (options.pagination === 'offset') {
+    params.set('offset', String(Math.max(0, Math.trunc(options.offset ?? 0))));
+  } else if (options.cursor) {
+    params.set('next_cursor', options.cursor);
+  }
   if (options.archived !== undefined) params.set('archived', String(options.archived));
   if (options.closed !== undefined) params.set('closed', String(options.closed));
-  return `${base}/events/keyset?${params.toString()}`;
+  return `${base}/${options.pagination === 'offset' ? 'events' : 'events/keyset'}?${params.toString()}`;
 }
 
 export function fetchGammaEvents(

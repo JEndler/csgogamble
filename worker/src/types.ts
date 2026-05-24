@@ -55,6 +55,12 @@ export interface Env {
   DB: D1Database;
   RAW_HTML: R2Bucket;
   DEMOS: R2Bucket;
+  /**
+   * Dedicated R2 bucket for Polymarket raw artifacts (gamma pages, CLOB
+   * market detail, raw price-history JSON, normalized JSONL series). D1 only
+   * stores manifest pointers; the actual payloads live here.
+   */
+  POLYMARKET_DATA: R2Bucket;
   BROWSER: Fetcher;
   BROWSER_SESSION: DurableObjectNamespace;
   HLTV_BASE_URL: string;

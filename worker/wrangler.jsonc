@@ -61,6 +61,10 @@
     {
       "binding": "DEMOS",
       "bucket_name": "csgogamble-demos"
+    },
+    {
+      "binding": "POLYMARKET_DATA",
+      "bucket_name": "csgogamble-polymarket"
     }
   ],
   "vars": {

@@ -150,10 +150,12 @@ export function fetchClobMarket(
   return fetchJson<RawGammaMarket>(buildClobMarketUrl(conditionId, options), options);
 }
 
+export type PriceHistoryInterval = '1m' | '1h' | '6h' | '1d' | '1w' | 'max' | 'window';
+
 export interface FetchPriceHistoryOptions extends PolymarketFetchOptions {
   baseUrl?: string;
-  /** Polymarket-supported interval shorthand. */
-  interval?: '1m' | '1h' | '6h' | '1d' | '1w' | 'max';
+  /** Polymarket-supported interval shorthand, or window mode for explicit startTs/endTs calls. */
+  interval?: PriceHistoryInterval;
   /** Public price history fidelity in minutes. */
   fidelityMinutes?: number;
   /** Unix-seconds start cap when paging long ranges. */
@@ -168,7 +170,7 @@ export function buildPriceHistoryUrl(tokenId: string, options: FetchPriceHistory
   const base = options.baseUrl ?? CLOB_BASE_URL;
   const params = new URLSearchParams();
   params.set('market', tokenId);
-  if (options.interval) params.set('interval', options.interval);
+  if (options.interval && options.interval !== 'window') params.set('interval', options.interval);
   if (options.fidelityMinutes !== undefined) params.set('fidelity', String(options.fidelityMinutes));
   if (options.startTs !== undefined) params.set('startTs', String(options.startTs));
   if (options.endTs !== undefined) params.set('endTs', String(options.endTs));

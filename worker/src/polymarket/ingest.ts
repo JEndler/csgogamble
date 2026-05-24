@@ -282,12 +282,32 @@ export async function runGammaIngest(env: Env, input: GammaIngestInput): Promise
   return result;
 }
 
+const WINDOW_HISTORY_START_PADDING_SECONDS = 7 * 24 * 60 * 60;
+const WINDOW_HISTORY_END_PADDING_SECONDS = 2 * 24 * 60 * 60;
+
 interface TokenCandidate {
   tokenId: string;
   marketId: number | null;
   outcomeId: number | null;
   conditionId: string | null;
   outcomeLabel: string | null;
+  queryStartTs: number | null;
+  queryEndTs: number | null;
+}
+
+function unixSeconds(value: string | null): number | null {
+  if (!value) return null;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) ? Math.floor(millis / 1000) : null;
+}
+
+function deriveWindowBounds(startDate: string | null, endDate: string | null): { startTs: number | null; endTs: number | null } {
+  const start = unixSeconds(startDate) ?? unixSeconds(endDate);
+  const end = unixSeconds(endDate) ?? unixSeconds(startDate);
+  return {
+    startTs: start === null ? null : Math.max(0, start - WINDOW_HISTORY_START_PADDING_SECONDS),
+    endTs: end === null ? null : end + WINDOW_HISTORY_END_PADDING_SECONDS,
+  };
 }
 
 async function selectTokenCandidates(
@@ -296,11 +316,24 @@ async function selectTokenCandidates(
   limit: number,
 ): Promise<TokenCandidate[]> {
   if (Array.isArray(input.tokenIds) && input.tokenIds.length > 0) {
-    return input.tokenIds
-      .slice(0, limit)
-      .map((tokenId) => ({ tokenId, marketId: null, outcomeId: null, conditionId: null, outcomeLabel: null }));
+    return input.tokenIds.slice(0, limit).map((tokenId) => ({
+      tokenId,
+      marketId: null,
+      outcomeId: null,
+      conditionId: null,
+      outcomeLabel: null,
+      queryStartTs: input.startTs ?? null,
+      queryEndTs: input.endTs ?? null,
+    }));
   }
   const marketType = input.marketType ?? 'match_winner';
+  const dynamicWindow = input.interval === 'window' && input.startTs === undefined && input.endTs === undefined;
+  const startExpr = dynamicWindow
+    ? `CAST(MAX(0, unixepoch(COALESCE(m.start_date, m.end_date)) - ${WINDOW_HISTORY_START_PADDING_SECONDS}) AS TEXT)`
+    : '?4';
+  const endExpr = dynamicWindow
+    ? `CAST(unixepoch(COALESCE(m.end_date, m.start_date)) + ${WINDOW_HISTORY_END_PADDING_SECONDS} AS TEXT)`
+    : '?5';
   const onlyMissingClause =
     input.onlyMissing === false
       ? ''
@@ -310,15 +343,17 @@ async function selectTokenCandidates(
            WHERE ph.token_id = o.token_id
              AND ph.interval = ?2
              AND COALESCE(ph.fidelity_minutes, -1) = COALESCE(?3, -1)
-             AND COALESCE(ph.start_ts, '') = COALESCE(?4, '')
-             AND COALESCE(ph.end_ts, '') = COALESCE(?5, '')
+             AND COALESCE(ph.start_ts, '') = COALESCE(${startExpr}, '')
+             AND COALESCE(ph.end_ts, '') = COALESCE(${endExpr}, '')
         )`;
   const rows = await env.DB.prepare(
     `SELECT o.token_id AS tokenId,
             o.id AS outcomeId,
             o.label AS outcomeLabel,
             m.id AS marketId,
-            m.condition_id AS conditionId
+            m.condition_id AS conditionId,
+            m.start_date AS startDate,
+            m.end_date AS endDate
        FROM polymarket_outcomes o
        JOIN polymarket_markets m ON m.id = o.market_id
       WHERE o.token_id IS NOT NULL
@@ -335,8 +370,13 @@ async function selectTokenCandidates(
       input.endTs === undefined ? null : String(input.endTs),
       limit,
     )
-    .all<TokenCandidate>();
-  return rows.results ?? [];
+    .all<TokenCandidate & { startDate: string | null; endDate: string | null }>();
+  return (rows.results ?? []).map((row) => {
+    const bounds = dynamicWindow
+      ? deriveWindowBounds(row.startDate, row.endDate)
+      : { startTs: input.startTs ?? null, endTs: input.endTs ?? null };
+    return { ...row, queryStartTs: bounds.startTs, queryEndTs: bounds.endTs };
+  });
 }
 
 function normalizePriceHistoryJsonl(
@@ -387,12 +427,14 @@ export async function runPriceHistoryIngest(
   result.requested = candidates.length;
   for (const candidate of candidates) {
     try {
+      const startTs = candidate.queryStartTs ?? input.startTs;
+      const endTs = candidate.queryEndTs ?? input.endTs;
       // biome-ignore lint/performance/noAwaitInLoops: bounded serialized calls avoid API spikes.
       const response = await fetchPriceHistory(candidate.tokenId, {
         interval,
         fidelityMinutes,
-        startTs: input.startTs,
-        endTs: input.endTs,
+        startTs,
+        endTs,
       });
       const points = response.parsed.history ?? [];
       const date = new Date();
@@ -405,7 +447,7 @@ export async function runPriceHistoryIngest(
         response.rawBody,
         'application/json',
       );
-      const jsonl = normalizePriceHistoryJsonl(candidate, points, { ...input, interval, fidelityMinutes });
+      const jsonl = normalizePriceHistoryJsonl(candidate, points, { ...input, interval, fidelityMinutes, startTs, endTs });
       // biome-ignore lint/performance/noAwaitInLoops: R2 write per token.
       const seriesArtifact = await putPolymarketTextArtifact(
         env.POLYMARKET_DATA,
@@ -421,8 +463,8 @@ export async function runPriceHistoryIngest(
         tokenId: candidate.tokenId,
         interval,
         fidelityMinutes,
-        startTs: input.startTs === undefined ? null : String(input.startTs),
-        endTs: input.endTs === undefined ? null : String(input.endTs),
+        startTs: startTs === undefined ? null : String(startTs),
+        endTs: endTs === undefined ? null : String(endTs),
         pointCount: points.length,
         rawR2Key: rawArtifact.key,
         seriesR2Key: seriesArtifact.key,

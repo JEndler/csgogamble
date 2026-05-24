@@ -49,6 +49,16 @@ describe('polymarket client url builders', () => {
     expect(url).toContain('startTs=100');
     expect(url).toContain('endTs=200');
   });
+
+  it('omits CLOB interval for explicit start/end window price-history mode', () => {
+    const url = buildPriceHistoryUrl('tok-1', { interval: 'window', fidelityMinutes: 60, startTs: 100, endTs: 200 });
+    const params = new URL(url).searchParams;
+    expect(params.get('market')).toBe('tok-1');
+    expect(params.has('interval')).toBe(false);
+    expect(params.get('fidelity')).toBe('60');
+    expect(params.get('startTs')).toBe('100');
+    expect(params.get('endTs')).toBe('200');
+  });
 });
 
 describe('polymarket client fetchers', () => {

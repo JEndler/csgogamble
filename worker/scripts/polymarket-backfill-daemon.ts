@@ -1,17 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { queryD1, toNumber } from './ops-utils';
-
-type Phase = 'gamma' | 'price-history';
-type MarketType =
-  | 'match_winner'
-  | 'map_winner'
-  | 'total_maps'
-  | 'map_handicap'
-  | 'outright'
-  | 'player_prop'
-  | 'other'
-  | 'unknown';
+import {
+  type PolymarketBackfillArgs as Args,
+  type MarketType,
+  parsePolymarketBackfillArgs,
+} from './polymarket-backfill-args';
 
 interface GammaResult {
   ok: true;
@@ -74,24 +68,6 @@ interface PriceCheckpoint {
   errors: number;
 }
 
-interface Args {
-  phase: Phase;
-  apply: boolean;
-  closed?: boolean;
-  archived?: boolean;
-  pageLimit: number;
-  maxPagesPerCall: number;
-  marketType: MarketType;
-  interval: string;
-  fidelity: number;
-  batchSize: number;
-  throttleMs: number;
-  maxCalls: number;
-  checkpoint: string;
-  startTs?: number;
-  endTs?: number;
-}
-
 function loadDotEnvFile(path: string): void {
   if (!existsSync(path)) return;
   for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
@@ -116,54 +92,6 @@ function loadEnv(): void {
   loadDotEnvFile('.dev.vars');
   process.env.CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? process.env.CF_API_TOKEN;
   process.env.CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID ?? process.env.CF_ACCOUNT_ID;
-}
-
-function parseFlag(args: string[], name: string): string | null {
-  const eq = args.find((arg) => arg.startsWith(`${name}=`));
-  if (eq) return eq.slice(name.length + 1);
-  const index = args.indexOf(name);
-  return index >= 0 ? (args[index + 1] ?? null) : null;
-}
-
-function numberFlag(args: string[], name: string, fallback: number): number {
-  const raw = parseFlag(args, name);
-  const value = raw === null ? fallback : Number(raw);
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function booleanFlag(args: string[], name: string): boolean | undefined {
-  const raw = parseFlag(args, name);
-  if (raw === null) return undefined;
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  return undefined;
-}
-
-function parseArgs(): Args {
-  const argv = process.argv.slice(2);
-  const phase = (parseFlag(argv, '--phase') ?? 'gamma') as Phase;
-  if (phase !== 'gamma' && phase !== 'price-history') throw new Error(`Unsupported --phase ${phase}`);
-  const defaultCheckpoint =
-    phase === 'gamma'
-      ? `.polymarket-backfill/gamma-closed=${parseFlag(argv, '--closed') ?? 'true'}-archived=${parseFlag(argv, '--archived') ?? 'false'}.json`
-      : `.polymarket-backfill/price-history-${parseFlag(argv, '--market-type') ?? 'match_winner'}-${parseFlag(argv, '--interval') ?? '1h'}-fidelity=${parseFlag(argv, '--fidelity') ?? '60'}.json`;
-  return {
-    phase,
-    apply: argv.includes('--apply'),
-    closed: booleanFlag(argv, '--closed'),
-    archived: booleanFlag(argv, '--archived'),
-    pageLimit: numberFlag(argv, '--page-limit', 500),
-    maxPagesPerCall: numberFlag(argv, '--max-pages-per-call', 10),
-    marketType: (parseFlag(argv, '--market-type') ?? 'match_winner') as MarketType,
-    interval: parseFlag(argv, '--interval') ?? '1h',
-    fidelity: numberFlag(argv, '--fidelity', 60),
-    batchSize: numberFlag(argv, '--batch-size', 100),
-    throttleMs: numberFlag(argv, '--throttle-ms', 1000),
-    maxCalls: numberFlag(argv, '--max-calls', Number.POSITIVE_INFINITY),
-    checkpoint: parseFlag(argv, '--checkpoint') ?? defaultCheckpoint,
-    startTs: parseFlag(argv, '--start-ts') === null ? undefined : numberFlag(argv, '--start-ts', 0),
-    endTs: parseFlag(argv, '--end-ts') === null ? undefined : numberFlag(argv, '--end-ts', 0),
-  };
 }
 
 function nowIso(): string {
@@ -224,21 +152,43 @@ function logProgress(message: string, fields: Record<string, unknown> = {}): voi
 }
 
 async function countPriceCandidates(args: Args): Promise<{ total: number; done: number; remaining: number }> {
+  const marketType = args.marketType.replace(/'/g, "''");
+  const interval = args.interval.replace(/'/g, "''");
+  const fidelity = Math.trunc(args.fidelity);
+  const dynamicWindow = args.interval === 'window' && args.startTs === undefined && args.endTs === undefined;
+  const startExpr = dynamicWindow
+    ? "CAST(MAX(0, unixepoch(COALESCE(m.start_date, m.end_date)) - 604800) AS TEXT)"
+    : args.startTs === undefined
+      ? "''"
+      : `'${String(args.startTs)}'`;
+  const endExpr = dynamicWindow
+    ? "CAST(unixepoch(COALESCE(m.end_date, m.start_date)) + 172800 AS TEXT)"
+    : args.endTs === undefined
+      ? "''"
+      : `'${String(args.endTs)}'`;
   const totalRows = await queryD1(
     `SELECT COUNT(DISTINCT o.token_id) AS count
        FROM polymarket_outcomes o
        JOIN polymarket_markets m ON m.id = o.market_id
       WHERE o.token_id IS NOT NULL
-        AND m.market_type = '${args.marketType.replace(/'/g, "''")}'`,
+        AND m.market_type = '${marketType}'`,
     (row) => ({ count: toNumber(row.count) }),
   );
   const doneRows = await queryD1(
-    `SELECT COUNT(DISTINCT token_id) AS count
-       FROM polymarket_price_history_manifests
-      WHERE interval = '${args.interval.replace(/'/g, "''")}'
-        AND COALESCE(fidelity_minutes, -1) = ${Math.trunc(args.fidelity)}
-        AND COALESCE(start_ts, '') = ${args.startTs === undefined ? "''" : `'${String(args.startTs)}'`}
-        AND COALESCE(end_ts, '') = ${args.endTs === undefined ? "''" : `'${String(args.endTs)}'`}`,
+    `SELECT COUNT(DISTINCT o.token_id) AS count
+       FROM polymarket_outcomes o
+       JOIN polymarket_markets m ON m.id = o.market_id
+      WHERE o.token_id IS NOT NULL
+        AND m.market_type = '${marketType}'
+        AND EXISTS (
+          SELECT 1
+            FROM polymarket_price_history_manifests ph
+           WHERE ph.token_id = o.token_id
+             AND ph.interval = '${interval}'
+             AND COALESCE(ph.fidelity_minutes, -1) = ${fidelity}
+             AND COALESCE(ph.start_ts, '') = COALESCE(${startExpr}, '')
+             AND COALESCE(ph.end_ts, '') = COALESCE(${endExpr}, '')
+        )`,
     (row) => ({ count: toNumber(row.count) }),
   );
   const total = totalRows[0]?.count ?? 0;
@@ -435,7 +385,7 @@ async function runPriceHistory(args: Args): Promise<void> {
 
 async function main(): Promise<void> {
   loadEnv();
-  const args = parseArgs();
+  const args = parsePolymarketBackfillArgs();
   logProgress('polymarket-backfill-start', {
     phase: args.phase,
     apply: args.apply,

@@ -1,33 +1,5 @@
 # TODO
 
-## Done: ingestion health report
-
-Implemented as a one-command remote D1 health check.
-
-Command:
-
-```bash
-cd worker
-npm run health:ingest
-npm run health:ingest -- --json
-npm run health:ingest -- --strict --samples 10
-```
-
-Current behavior:
-
-- Reports match counts and parsed / partial / challenge / error percentages.
-- Reports latest ingest timestamp and freshness gate.
-- Reports current parser-version coverage.
-- Reports raw HTML artifact coverage and suspicious-small-artifact checks.
-- Reports enriched child-table coverage for maps, player stats, vetoes, lineups, and streams.
-- Reports parser warnings, missing critical parsed fields, recent 24h/7d status, stale parser samples, and remediation samples.
-- Exits nonzero on hard health failures, and also on warnings when `--strict` is used.
-
-Remaining cleanup:
-
-- Add focused unit tests for threshold/gate behavior when the script is split into testable modules.
-- Add a small operational command for closing stale `ingest_runs` rows rather than doing manual D1 SQL.
-
 ## 1. Reliable Cloudflare-native acquisition
 
 Goal: make acquisition scale predictably while respecting the hard boundary: no protected-source local scraping by default. Acquisition should run through deployed Workers / Cloudflare Browser Rendering; local work is limited to tests, D1/R2 inspection, parser replay, and docs.
@@ -212,6 +184,7 @@ Definition of done:
 Plan:
 
 - Add structured run summaries for scheduled discovery, backfill, and queue ingestion.
+- Add focused unit tests for health threshold/gate behavior when the script is split into testable modules.
 - Add `npm run health:ingest -- --json` output suitable for cron/watchdog consumption.
 - Add a small watchdog cron in Hermes only after the repo command is stable:
   - alert when latest ingest is stale

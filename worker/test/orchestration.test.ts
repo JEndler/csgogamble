@@ -608,6 +608,49 @@ describe('queue orchestration helpers', () => {
     expect(second.retry).not.toHaveBeenCalled();
   });
 
+  it('preserves pageUrl when a canary discovery enqueues its follow-up', async () => {
+    const pageUrl = `https://www.hltv.org/results?${new URLSearchParams({
+      startDate: '2025-09-24',
+      endDate: '2025-09-24',
+    }).toString()}`;
+    handleRequestMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        pageUrl,
+        discovered: 1,
+        matchUrls: ['https://www.hltv.org/matches/123/alpha-vs-beta'],
+      }),
+    );
+    const sendBatch = vi.fn();
+    const batch = createBatch([
+      createDiscoverResultsMessage({
+        pageUrl,
+        source: 'cron:historical-canary',
+        acquisitionMode: 'http-stealth',
+        browserSessionKey: 'historical-2025-09-24',
+        maxMatches: 1,
+        canary: true,
+        followupMaxMatches: 25,
+        persistHtml: true,
+      }),
+    ]);
+
+    await processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch } } as unknown as Env);
+
+    expect(sendBatch).toHaveBeenCalledWith([
+      {
+        body: createDiscoverResultsMessage({
+          pageUrl,
+          source: 'cron:historical-canary:followup',
+          acquisitionMode: 'http-stealth',
+          browserSessionKey: 'historical-2025-09-24',
+          maxMatches: 25,
+          persistHtml: true,
+        }),
+      },
+    ]);
+  });
+
   it('rejects malformed queue messages', () => {
     expect(() => parseQueueMessage({ type: 'unknown', payload: {} })).toThrow('Unsupported queue message type');
     expect(() => parseQueueMessage({ type: 'discover-results', payload: { pageUrl: 123 } })).toThrow(

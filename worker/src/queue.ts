@@ -266,6 +266,7 @@ async function runDiscovery(env: Env, message: DiscoverQueueMessage, runId: numb
     const followupMaxMatches = message.payload.followupMaxMatches ?? 20;
     await enqueueMessages(env, [
       createDiscoverResultsMessage({
+        pageUrl: message.payload.pageUrl,
         source: message.payload.source ? `${message.payload.source}:followup` : 'cron:canary:followup',
         acquisitionMode: message.payload.acquisitionMode,
         browserSessionKey: message.payload.browserSessionKey,

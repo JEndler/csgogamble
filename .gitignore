@@ -32,6 +32,7 @@ venv/
 *.log
 /tmp/
 worker/.polymarket-backfill/
+worker/.hltv-overlap/
 worker/logs/
 
 # Legacy local artifacts

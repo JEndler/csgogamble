@@ -38,6 +38,21 @@ describe('classifyMarket', () => {
     expect(result.parsed.team2Name).toBe('Falcons');
   });
 
+  it('classifies Polymarket CS-prefixed match winners with clean team names', () => {
+    const result = classifyMarket(
+      market({
+        question: 'Counter-Strike: Liquid vs NIP (BO3)',
+        outcomes: [
+          { index: 0, label: 'Liquid', tokenId: 't1', lastPrice: 0.55 },
+          { index: 1, label: 'NIP', tokenId: 't2', lastPrice: 0.45 },
+        ],
+      }),
+    );
+    expect(result.marketType).toBe('match_winner');
+    expect(result.parsed.team1Name).toBe('Liquid');
+    expect(result.parsed.team2Name).toBe('NIP');
+  });
+
   it('classifies a market with a map name and vs as map_winner', () => {
     const result = classifyMarket(
       market({

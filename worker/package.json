@@ -27,7 +27,8 @@
     "polymarket:backfill": "tsx scripts/polymarket-backfill-daemon.ts",
     "polymarket:canary": "tsx scripts/polymarket-canary.ts",
     "polymarket:worker": "tsx scripts/polymarket-worker-run.ts",
-    "health:polymarket": "tsx scripts/polymarket-health.ts"
+    "health:polymarket": "tsx scripts/polymarket-health.ts",
+    "polymarket:reclassify": "tsx scripts/reclassify-polymarket-markets.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",

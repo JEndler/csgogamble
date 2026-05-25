@@ -79,7 +79,19 @@ describe('parseMarketTitle', () => {
   it('splits a head-to-head title into team1/team2', () => {
     const parsed = parseMarketTitle('Liquid vs Falcons - Map 1', null);
     expect(parsed.team1Name).toBe('Liquid');
-    expect(parsed.team2Name).toBe('Falcons - Map 1');
+    expect(parsed.team2Name).toBe('Falcons');
+  });
+
+  it('strips Polymarket CS prefix and BO suffixes from match winner teams', () => {
+    const parsed = parseMarketTitle('Counter-Strike: FURIA vs 9INE (BO3)', null);
+    expect(parsed.team1Name).toBe('FURIA');
+    expect(parsed.team2Name).toBe('9INE');
+  });
+
+  it('preserves meaningful roster qualifiers while stripping only market boilerplate', () => {
+    const parsed = parseMarketTitle('Counter-Strike: Eternal Fire Academy vs FURIA fe (BO1) - Some Event', null);
+    expect(parsed.team1Name).toBe('Eternal Fire Academy');
+    expect(parsed.team2Name).toBe('FURIA fe');
   });
 
   it('detects map names case-insensitively', () => {

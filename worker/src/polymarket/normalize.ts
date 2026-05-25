@@ -165,12 +165,21 @@ function detectMapName(text: string): string | null {
 
 const VS_SPLIT_REGEX = /\s+(?:vs\.?|v\.?|versus)\s+/i;
 
+function cleanParsedTeamName(value: string): string {
+  return value
+    .replace(/^(?:counter[-\s]?strike|cs2|cs:go|csgo)\s*:\s*/i, '')
+    .replace(/\s*\(\s*bo[1-9]\s*\)\s*/gi, ' ')
+    .replace(/\s+-\s+.*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function splitTeamsFromTitle(title: string): { team1: string; team2: string } | null {
   const trimmed = title.replace(/\?+$/g, '').trim();
   const match = trimmed.split(VS_SPLIT_REGEX);
   if (match.length !== 2) return null;
-  const team1 = match[0]?.trim();
-  const team2 = match[1]?.trim();
+  const team1 = cleanParsedTeamName(match[0] ?? '');
+  const team2 = cleanParsedTeamName(match[1] ?? '');
   if (!team1 || !team2) return null;
   return { team1, team2 };
 }

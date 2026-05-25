@@ -1,4 +1,4 @@
-import { sha256Hex } from '../storage';
+import { putTextArtifact } from '../storage';
 import type { PersistedArtifactResult } from '../types';
 
 /**
@@ -68,15 +68,5 @@ export async function putPolymarketTextArtifact(
   body: string,
   contentType: string,
 ): Promise<PersistedArtifactResult | null> {
-  if (!bucket) return null;
-  const checksum = await sha256Hex(body);
-  await bucket.put(key, body, {
-    httpMetadata: { contentType },
-    customMetadata: { checksumSha256: checksum },
-  });
-  return {
-    key,
-    size: new TextEncoder().encode(body).byteLength,
-    sha256: checksum,
-  };
+  return putTextArtifact(bucket, key, body, contentType);
 }

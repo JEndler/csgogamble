@@ -282,6 +282,26 @@ export async function runGammaIngest(env: Env, input: GammaIngestInput): Promise
 
 const WINDOW_HISTORY_START_PADDING_SECONDS = 7 * 24 * 60 * 60;
 const WINDOW_HISTORY_END_PADDING_SECONDS = 2 * 24 * 60 * 60;
+const MAX_MINUTE_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+
+export function capWindowEndAligned(
+  startTs: number,
+  endTs: number,
+  maxSpanSeconds = MAX_MINUTE_WINDOW_SECONDS,
+): { startTs: number; endTs: number } {
+  return { startTs: Math.max(startTs, endTs - maxSpanSeconds), endTs };
+}
+
+export function shouldRetryWithCappedWindow(
+  error: unknown,
+  options: { interval: string; fidelityMinutes: number; startTs: number | undefined; endTs: number | undefined },
+): boolean {
+  if (!(error instanceof PolymarketFetchError)) return false;
+  if (error.status !== 400 || error.errorClass !== 'http_4xx') return false;
+  if (options.interval !== 'window' || options.fidelityMinutes !== 1) return false;
+  if (options.startTs === undefined || options.endTs === undefined) return false;
+  return options.endTs - options.startTs > MAX_MINUTE_WINDOW_SECONDS;
+}
 
 interface TokenCandidate {
   tokenId: string;
@@ -430,12 +450,24 @@ export async function runPriceHistoryIngest(
     try {
       const startTs = candidate.queryStartTs ?? input.startTs;
       const endTs = candidate.queryEndTs ?? input.endTs;
-      const response = await fetchPriceHistory(candidate.tokenId, {
-        interval,
-        fidelityMinutes,
-        startTs,
-        endTs,
-      });
+      let response: Awaited<ReturnType<typeof fetchPriceHistory>>;
+      try {
+        response = await fetchPriceHistory(candidate.tokenId, {
+          interval,
+          fidelityMinutes,
+          startTs,
+          endTs,
+        });
+      } catch (error) {
+        if (!shouldRetryWithCappedWindow(error, { interval, fidelityMinutes, startTs, endTs })) throw error;
+        const capped = capWindowEndAligned(startTs as number, endTs as number);
+        response = await fetchPriceHistory(candidate.tokenId, {
+          interval,
+          fidelityMinutes,
+          startTs: capped.startTs,
+          endTs: capped.endTs,
+        });
+      }
       const points = response.parsed.history ?? [];
       const date = new Date();
       const rawKey = priceHistoryRawKey(candidate.tokenId, interval, fidelityMinutes, date);

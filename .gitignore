@@ -34,6 +34,7 @@ venv/
 worker/.polymarket-backfill/
 worker/.hltv-overlap/
 worker/logs/
+worker/artifacts/
 
 # Legacy local artifacts
 archive/python-legacy/.venv/

@@ -134,6 +134,15 @@ describe('circuit state', () => {
     expect(decision.state.lastFailureClass).toBe('timeout');
   });
 
+  it('opens immediately on rate limits', async () => {
+    const nowMs = 1_000_000;
+    await recordFailure(env, 'rate_limited', 'Fetch failed with status 429', { nowMs });
+    const decision = await evaluateCircuit(env, { nowMs });
+    expect(decision.open).toBe(true);
+    expect(decision.state.lastFailureClass).toBe('rate_limited');
+    expect(decision.state.cooldownUntilMs).toBe(nowMs + DEFAULT_COOLDOWN_MS);
+  });
+
   it('resetCircuit clears persisted state', async () => {
     await recordFailure(env, 'challenge', 'cf', {});
     await resetCircuit(env);

@@ -129,7 +129,8 @@ export async function recordFailure(
   const previous = await readState(env, key, nowMs);
 
   const consecutiveChallenges = failureClass === 'challenge' ? previous.consecutiveChallenges + 1 : 0;
-  const shouldOpen = failureClass === 'challenge' && consecutiveChallenges >= threshold;
+  const shouldOpen =
+    (failureClass === 'challenge' && consecutiveChallenges >= threshold) || failureClass === 'rate_limited';
 
   const next: CircuitState = {
     consecutiveChallenges,

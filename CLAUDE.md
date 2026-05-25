@@ -132,7 +132,7 @@ Operator checks:
 - preflight must pass hard gates before scaling
 - stale `ingest_runs` are closed with `npm run ops:close-stale-runs`, not manual D1 SQL
 - canary success means no crashes, no unclassified errors, no unexplained active stuck runs, parsed + partial >= 85%, challenge <= 8%, and raw artifact/enrichment coverage does not regress
-- regular scheduled discovery uses `http-stealth`, canary maxMatches=1, follow-up fan-out maxMatches=40, and queue consumer `max_concurrency=1`; keep this posture unless a new rate-limit backoff/retry mechanism is verified
+- regular scheduled discovery uses `http-stealth`, canary maxMatches=1, follow-up fan-out maxMatches=11 (~1,056 match fetches/day), queue consumer `max_concurrency=1`, and scheduled HTTP ingest pacing/jitter; keep this posture while measuring 429/challenge rates before raising volume
 - resume must use the existing run id and must not duplicate candidate processing
 
 ## Current production posture

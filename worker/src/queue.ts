@@ -29,6 +29,8 @@ const SCHEDULED_DISCOVER_LOCK_KEY = 'scheduled_discovery_lock';
 const SCHEDULED_DISCOVER_LOCK_TTL_MS = 10 * 60 * 1_000;
 /** Canary challenge must open the circuit immediately to abort fan-out. */
 const CANARY_CHALLENGE_THRESHOLD = 1;
+const SCHEDULED_HTTP_INGEST_MIN_DELAY_MS = 1_000;
+const SCHEDULED_HTTP_INGEST_MAX_DELAY_MS = 3_000;
 
 type QueueDispatchResult = DiscoverResultsResponse | IngestMatchResponse;
 
@@ -64,6 +66,24 @@ function readOptionalAcquisitionMode(value: unknown): AcquisitionMode | undefine
 
 function isQueueMessageValidationError(error: unknown): error is QueueMessageValidationError {
   return error instanceof QueueMessageValidationError;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isScheduledSource(source: string | undefined): boolean {
+  return source?.startsWith('cron:') ?? false;
+}
+
+function shouldPaceScheduledIngest(message: IngestMatchQueueMessage): boolean {
+  const mode = message.payload.acquisitionMode;
+  return isScheduledSource(message.payload.source) && (mode === 'http' || mode === 'http-stealth');
+}
+
+function scheduledIngestDelayMs(): number {
+  const span = SCHEDULED_HTTP_INGEST_MAX_DELAY_MS - SCHEDULED_HTTP_INGEST_MIN_DELAY_MS;
+  return SCHEDULED_HTTP_INGEST_MIN_DELAY_MS + Math.floor(Math.random() * (span + 1));
 }
 
 async function invokeEndpoint<TResponse extends QueueDispatchResult>(
@@ -302,7 +322,7 @@ interface DiscoverContext {
 }
 
 function buildDiscoverContext(message: DiscoverQueueMessage): DiscoverContext {
-  const isScheduledRun = message.payload.source?.startsWith('cron:') ?? false;
+  const isScheduledRun = isScheduledSource(message.payload.source);
   const runTarget = message.payload.browserSessionKey ?? message.payload.pageUrl ?? null;
   const lockToken = isScheduledRun ? `${message.payload.browserSessionKey ?? 'cron'}:${Date.now()}` : null;
   return { isScheduledRun, runTarget, lockToken };
@@ -435,7 +455,16 @@ async function processIngestMessage(env: Env, message: IngestMatchQueueMessage):
       return;
     }
   }
+  if (!backfillRunId && isScheduledSource(message.payload.source)) {
+    const decision = await evaluateCircuit(env, { key: SCHEDULED_DISCOVERY_CIRCUIT_KEY });
+    if (decision.open) {
+      return;
+    }
+  }
   try {
+    if (shouldPaceScheduledIngest(message)) {
+      await sleep(scheduledIngestDelayMs());
+    }
     const response = await invokeEndpoint<IngestMatchResponse>(env, '/ingest/match', {
       matchUrl: message.payload.matchUrl,
       matchId: message.payload.matchId,
@@ -454,16 +483,27 @@ async function processIngestMessage(env: Env, message: IngestMatchQueueMessage):
     }
   } catch (error) {
     const failureClass = classifyFailure(error);
+    const messageText = error instanceof Error ? error.message : String(error);
+    if (!backfillRunId && isScheduledSource(message.payload.source)) {
+      if (failureClass === 'challenge' || failureClass === 'rate_limited') {
+        await recordFailure(env, failureClass, messageText, {
+          key: SCHEDULED_DISCOVERY_CIRCUIT_KEY,
+          threshold: CANARY_CHALLENGE_THRESHOLD,
+        });
+      }
+      if (failureClass === 'rate_limited') {
+        throw error;
+      }
+    }
     if (backfillRunId && backfillCandidateId) {
       if (failureClass === 'unknown' || failureClass === 'rate_limited') {
         throw error;
       }
-      const message = error instanceof Error ? error.message : String(error);
       const terminalState: BackfillCandidateTerminalState =
         failureClass === 'challenge' ? 'challenge' : 'failed_classified';
       await finalizeBackfillFromIngest(env, backfillRunId, backfillCandidateId, terminalState, {
         failureClass,
-        message,
+        message: messageText,
       });
       return;
     }

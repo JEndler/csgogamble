@@ -499,6 +499,115 @@ describe('queue orchestration helpers', () => {
     expect(message.retry).not.toHaveBeenCalled();
   });
 
+  it('opens circuit and retries scheduled match ingest on rate limits', async () => {
+    handleRequestMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Fetch failed with status 429' }, 429));
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        source: 'cron:test:followup',
+        acquisitionMode: 'browser',
+      }),
+    ]);
+
+    await expect(
+      processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env),
+    ).rejects.toThrow('Fetch failed with status 429');
+
+    expect(recordFailureMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'rate_limited',
+      expect.stringContaining('429'),
+      expect.objectContaining({ threshold: 1 }),
+    );
+    const message = batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn>; retry: ReturnType<typeof vi.fn> };
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips scheduled match ingest without acquisition while the circuit is open', async () => {
+    evaluateCircuitMock.mockResolvedValueOnce({
+      open: true,
+      cooldownRemainingMs: 30 * 60_000,
+      state: {
+        consecutiveChallenges: 0,
+        lastFailureClass: 'rate_limited',
+        lastFailureMessage: '429',
+        openedAtMs: 1,
+        cooldownUntilMs: 30 * 60_000,
+        updatedAtMs: 1,
+      },
+    });
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        source: 'cron:test:followup',
+        acquisitionMode: 'http-stealth',
+      }),
+    ]);
+
+    await processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env);
+
+    expect(handleRequestMock).not.toHaveBeenCalled();
+    const message = batch.messages[0] as unknown as { ack: ReturnType<typeof vi.fn>; retry: ReturnType<typeof vi.fn> };
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it('stops acquiring later scheduled match messages after a rate-limit opens the circuit', async () => {
+    evaluateCircuitMock
+      .mockResolvedValueOnce({
+        open: false,
+        cooldownRemainingMs: 0,
+        state: {
+          consecutiveChallenges: 0,
+          lastFailureClass: null,
+          lastFailureMessage: null,
+          openedAtMs: null,
+          cooldownUntilMs: null,
+          updatedAtMs: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        open: true,
+        cooldownRemainingMs: 30 * 60_000,
+        state: {
+          consecutiveChallenges: 0,
+          lastFailureClass: 'rate_limited',
+          lastFailureMessage: '429',
+          openedAtMs: 1,
+          cooldownUntilMs: 30 * 60_000,
+          updatedAtMs: 1,
+        },
+      });
+    handleRequestMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Fetch failed with status 429' }, 429));
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        source: 'cron:test:followup',
+        acquisitionMode: 'browser',
+      }),
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/456/_',
+        source: 'cron:test:followup',
+        acquisitionMode: 'browser',
+      }),
+    ]);
+
+    await expect(
+      processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env),
+    ).rejects.toThrow('Fetch failed with status 429');
+
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+    const first = batch.messages[0] as unknown as { retry: ReturnType<typeof vi.fn> };
+    const second = batch.messages[1] as unknown as { ack: ReturnType<typeof vi.fn>; retry: ReturnType<typeof vi.fn> };
+    expect(first.retry).toHaveBeenCalledTimes(1);
+    expect(second.ack).toHaveBeenCalledTimes(1);
+    expect(second.retry).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed queue messages', () => {
     expect(() => parseQueueMessage({ type: 'unknown', payload: {} })).toThrow('Unsupported queue message type');
     expect(() => parseQueueMessage({ type: 'discover-results', payload: { pageUrl: 123 } })).toThrow(

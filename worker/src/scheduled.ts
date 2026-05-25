@@ -3,7 +3,10 @@ import { createIngestRun } from './db';
 import { createDiscoverResultsMessage, enqueueMessages } from './queue';
 import type { Env } from './types';
 
-const DEFAULT_DISCOVERY_FANOUT_MAX_MATCHES = 40;
+// 11 matches every 15 minutes is ~1,056 scheduled match fetches/day.
+// Keep queue max_concurrency=1 and canary-first discovery; this target spreads
+// load evenly instead of burst-testing the previously verified 40/run ceiling.
+const DEFAULT_DISCOVERY_FANOUT_MAX_MATCHES = 11;
 /**
  * Canary discoveries fetch a tiny slice of the source first. If they succeed,
  * the consumer enqueues the real fan-out; if they're challenged or classified

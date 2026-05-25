@@ -48,6 +48,7 @@ export interface BrowserPageSnapshot {
   finalUrl: string;
   html: string;
   title: string | null;
+  acquisitionProfileId?: string;
 }
 
 export interface BrowserSessionCloseResponse {

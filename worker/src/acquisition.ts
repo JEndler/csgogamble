@@ -4,7 +4,7 @@ import {
   fetchPageSnapshotWithBrowser,
   fetchPageSnapshotWithSession,
 } from './browser-session';
-import { fetchText, fetchTextWithStealthHeaders } from './http';
+import { fetchText, fetchTextWithStealthHeaders, resolveStealthFetchProfile } from './http';
 import type { AcquisitionMode, Env } from './types';
 
 const DEFAULT_BROWSER_SESSION_KEY = 'default';
@@ -34,13 +34,17 @@ export async function acquirePageSnapshot(
         warmup: true,
         recaptureChallenge: true,
       });
-    case 'http-stealth':
+    case 'http-stealth': {
+      const profileKey = browserSessionKey ? `${browserSessionKey}:${targetUrl}` : targetUrl;
+      const profile = resolveStealthFetchProfile(profileKey);
       return {
         requestedUrl: targetUrl,
         finalUrl: targetUrl,
-        html: await fetchTextWithStealthHeaders(targetUrl),
+        html: await fetchTextWithStealthHeaders(targetUrl, undefined, profile.id),
         title: null,
+        acquisitionProfileId: profile.id,
       };
+    }
     default:
       return {
         requestedUrl: targetUrl,

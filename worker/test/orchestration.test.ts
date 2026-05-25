@@ -467,6 +467,49 @@ describe('queue orchestration helpers', () => {
     expect((batch.messages[0] as unknown as { retry: ReturnType<typeof vi.fn> }).retry).toHaveBeenCalledTimes(1);
   });
 
+  it('records acquisition profile notes on finalized backfill candidates', async () => {
+    getBackfillCandidateForRunMock.mockResolvedValueOnce({
+      id: 7,
+      runId: 42,
+      hltvMatchId: 123,
+      sourceUrl: 'https://www.hltv.org/matches/123/_',
+      state: 'enqueued',
+      failureClass: null,
+      attempts: 1,
+      lastAttemptAt: 'now',
+      finishedAt: null,
+      message: null,
+    });
+    handleRequestMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        fetchedAt: 'now',
+        parsed: { status: 'parsed', parseWarnings: [] },
+        artifact: null,
+        notes: ['Acquired via http-stealth profile firefox-mac'],
+      }),
+    );
+
+    const batch = createBatch([
+      createIngestMatchMessage({
+        matchUrl: 'https://www.hltv.org/matches/123/_',
+        acquisitionMode: 'http-stealth',
+        backfillRunId: 42,
+        backfillCandidateId: 7,
+      }),
+    ]);
+
+    await processQueueBatch(batch, { INGESTION_QUEUE: { sendBatch: vi.fn() } } as unknown as Env);
+
+    expect(finalizeBackfillCandidateMock).toHaveBeenCalledWith(
+      expect.anything(),
+      7,
+      'parsed',
+      expect.objectContaining({ message: 'Acquired via http-stealth profile firefox-mac' }),
+    );
+    expect(incrementBackfillCounterMock).toHaveBeenCalledWith(expect.anything(), 42, 'parsed', 1);
+  });
+
   it('finalizes classified backfill challenge failures and acks the message', async () => {
     getBackfillCandidateForRunMock.mockResolvedValueOnce({
       id: 7,

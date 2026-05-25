@@ -431,6 +431,12 @@ function ingestStatusToCandidateState(status: MatchStatus | null): BackfillCandi
   }
 }
 
+function candidateMessageFromIngestResponse(response: IngestMatchResponse): string | null {
+  const profileNote = response.notes.find((note) => note.startsWith('Acquired via '));
+  const warning = response.parsed?.parseWarnings?.[0];
+  return [profileNote, warning].filter(Boolean).join('; ') || null;
+}
+
 async function finalizeBackfillFromIngest(
   env: Env,
   runId: number,
@@ -479,7 +485,7 @@ async function processIngestMessage(env: Env, message: IngestMatchQueueMessage):
       const terminalState = ingestStatusToCandidateState(response.parsed?.status ?? null);
       await finalizeBackfillFromIngest(env, backfillRunId, backfillCandidateId, terminalState, {
         failureClass: terminalState === 'challenge' ? 'challenge' : null,
-        message: response.parsed?.parseWarnings?.[0] ?? null,
+        message: candidateMessageFromIngestResponse(response),
       });
     }
   } catch (error) {

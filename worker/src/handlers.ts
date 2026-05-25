@@ -17,6 +17,24 @@ import { nowIso } from './utils';
 
 const DEFAULT_DISCOVER_MAX_MATCHES = 20;
 
+function buildIngestNotes(
+  artifact: IngestMatchResponse['artifact'],
+  acquisitionMode: MatchIngestRequest['acquisitionMode'],
+  acquisitionProfileId: string | undefined,
+  finalUrl: string,
+  matchUrl: string,
+): string[] {
+  const notes = artifact ? [] : ['RAW_HTML persistence disabled for this request'];
+  if (acquisitionMode && acquisitionMode !== 'http') {
+    const profileSuffix = acquisitionProfileId ? ` profile ${acquisitionProfileId}` : '';
+    notes.push(`Acquired via ${acquisitionMode}${profileSuffix}`);
+  }
+  if (finalUrl !== matchUrl) {
+    notes.push(`Browser final URL differed from requested URL: ${finalUrl}`);
+  }
+  return notes;
+}
+
 /** Fetch, parse, and persist a single match page. */
 export async function handleIngestMatch(env: Env, request: MatchIngestRequest): Promise<Response> {
   const matchUrl = buildMatchUrl(env.HLTV_BASE_URL, request);
@@ -48,13 +66,13 @@ export async function handleIngestMatch(env: Env, request: MatchIngestRequest): 
       await persistParsedMatch(env, parsed, artifact);
     }
 
-    const notes = artifact ? [] : ['RAW_HTML persistence disabled for this request'];
-    if (request.acquisitionMode && request.acquisitionMode !== 'http') {
-      notes.push(`Acquired via ${request.acquisitionMode}`);
-    }
-    if (snapshot.finalUrl !== matchUrl) {
-      notes.push(`Browser final URL differed from requested URL: ${snapshot.finalUrl}`);
-    }
+    const notes = buildIngestNotes(
+      artifact,
+      request.acquisitionMode,
+      snapshot.acquisitionProfileId,
+      snapshot.finalUrl,
+      matchUrl,
+    );
 
     const response: IngestMatchResponse = {
       ok: true,

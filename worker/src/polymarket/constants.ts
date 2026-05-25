@@ -14,3 +14,6 @@ export const GAMMA_DEFAULT_PAGE_LIMIT = 100;
 
 /** Polymarket Gamma tag id for generated Counter-Strike 2 markets. */
 export const GAMMA_CS2_TAG_ID = 100780;
+
+/** Standard historical CLOB price-history sampling cadence for modeling. */
+export const DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES = 1;

@@ -63,6 +63,13 @@ Worker-native acquisition/backfill:
 - `npm run ops:canary` — canary alias
 - `npm run ops:resume -- --run-id <run-id>` — resume alias
 
+Polymarket historical odds:
+
+- Standard price-history fidelity is 1 minute. Omitting `--fidelity` now means `--fidelity 1`.
+- `npm run polymarket:backfill -- --phase price-history --apply --market-type match_winner --interval window --batch-size 5 --throttle-ms 750 --max-calls 1` — safe one-call canary for per-market explicit windows.
+- `npm run polymarket:backfill -- --phase price-history --apply --market-type match_winner --interval window --batch-size 5 --throttle-ms 750` — full 1-minute match-winner odds backfill into R2 with D1 manifests.
+- Historical price history is sampled/display odds, not historical bid/ask/orderbook depth or executable fills.
+
 Stale-run cleanup:
 
 - `npm run ops:close-stale-runs -- --threshold-hours 2 --limit 100` — dry-run stale `ingest_runs` cleanup

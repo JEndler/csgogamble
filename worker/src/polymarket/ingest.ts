@@ -1,7 +1,7 @@
 import type { Env } from '../types';
 import { classifyMarket } from './classifier';
 import { type FetchPriceHistoryOptions, fetchGammaEvents, fetchPriceHistory, PolymarketFetchError } from './client';
-import { GAMMA_CS2_TAG_ID } from './constants';
+import { DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES, GAMMA_CS2_TAG_ID } from './constants';
 import {
   bumpPolymarketRunCounter,
   createPolymarketCrawlRun,
@@ -301,7 +301,10 @@ function unixSeconds(value: string | null): number | null {
   return Number.isFinite(millis) ? Math.floor(millis / 1000) : null;
 }
 
-function deriveWindowBounds(startDate: string | null, endDate: string | null): { startTs: number | null; endTs: number | null } {
+function deriveWindowBounds(
+  startDate: string | null,
+  endDate: string | null,
+): { startTs: number | null; endTs: number | null } {
   const start = unixSeconds(startDate) ?? unixSeconds(endDate);
   const end = unixSeconds(endDate) ?? unixSeconds(startDate);
   return {
@@ -365,7 +368,7 @@ async function selectTokenCandidates(
     .bind(
       marketType,
       input.interval ?? '1h',
-      input.fidelityMinutes ?? 60,
+      input.fidelityMinutes ?? DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES,
       input.startTs === undefined ? null : String(input.startTs),
       input.endTs === undefined ? null : String(input.endTs),
       limit,
@@ -390,7 +393,7 @@ function normalizePriceHistoryJsonl(
       conditionId: candidate.conditionId,
       outcomeLabel: candidate.outcomeLabel,
       interval: options.interval ?? '1h',
-      fidelityMinutes: options.fidelityMinutes ?? 60,
+      fidelityMinutes: options.fidelityMinutes ?? DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES,
       startTs: options.startTs ?? null,
       endTs: options.endTs ?? null,
       t: point.t,
@@ -406,7 +409,7 @@ export async function runPriceHistoryIngest(
 ): Promise<PriceHistoryIngestResult> {
   const limit = clampInt(input.limit, 10, 1, 100);
   const interval = input.interval ?? '1h';
-  const fidelityMinutes = clampInt(input.fidelityMinutes, 60, 1, 1440);
+  const fidelityMinutes = clampInt(input.fidelityMinutes, DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES, 1, 1440);
   const runId =
     input.runId ??
     (await createPolymarketCrawlRun(env, {
@@ -447,7 +450,13 @@ export async function runPriceHistoryIngest(
         response.rawBody,
         'application/json',
       );
-      const jsonl = normalizePriceHistoryJsonl(candidate, points, { ...input, interval, fidelityMinutes, startTs, endTs });
+      const jsonl = normalizePriceHistoryJsonl(candidate, points, {
+        ...input,
+        interval,
+        fidelityMinutes,
+        startTs,
+        endTs,
+      });
       // biome-ignore lint/performance/noAwaitInLoops: R2 write per token.
       const seriesArtifact = await putPolymarketTextArtifact(
         env.POLYMARKET_DATA,

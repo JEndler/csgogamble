@@ -261,7 +261,7 @@ Goal: pull the best available public historical odds curve for each linked match
 Implementation todo:
 
 - For each linked match-winner market, pull CLOB `/prices-history` for both outcome token ids.
-- Use the highest practical fidelity available; public docs define fidelity in minutes, so treat v0 as minute-level, not second-level.
+- Standardize v0 on fidelity=1 minute; public docs define fidelity in minutes, so treat this as minute-level sampled/display odds, not second-level or executable bid/ask.
 - Pull windows needed for modeling:
   - all available history when practical
   - final 24h before game start

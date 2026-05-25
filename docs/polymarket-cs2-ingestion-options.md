@@ -138,7 +138,7 @@ GET /book?token_id={token_id}
 GET /price?token_id={token_id}&side=buy
 GET /midpoint?token_id={token_id}
 GET /spread?token_id={token_id}
-GET /prices-history?market={token_id}&interval=1d&fidelity=60
+GET /prices-history?market={token_id}&interval=1d&fidelity=1
 POST /batch-prices-history
 ```
 

@@ -1,3 +1,5 @@
+import { DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES } from '../src/polymarket/constants';
+
 export type Phase = 'gamma' | 'price-history';
 export type MarketType =
   | 'match_winner'
@@ -65,7 +67,7 @@ export function parsePolymarketBackfillArgs(argv: string[] = process.argv.slice(
   const hasExplicitWindow = startTs !== undefined || endTs !== undefined;
   const interval = intervalFlag ?? (phase === 'price-history' && hasExplicitWindow ? 'window' : '1h');
   const marketType = (parseFlag(argv, '--market-type') ?? 'match_winner') as MarketType;
-  const fidelityRaw = parseFlag(argv, '--fidelity') ?? '60';
+  const fidelityRaw = parseFlag(argv, '--fidelity') ?? String(DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES);
   const defaultCheckpoint =
     phase === 'gamma'
       ? `.polymarket-backfill/gamma-closed=${parseFlag(argv, '--closed') ?? 'true'}-archived=${parseFlag(argv, '--archived') ?? 'false'}.json`
@@ -84,7 +86,7 @@ export function parsePolymarketBackfillArgs(argv: string[] = process.argv.slice(
     maxPagesPerCall: numberFlag(argv, '--max-pages-per-call', 10),
     marketType,
     interval,
-    fidelity: numberFlag(argv, '--fidelity', 60),
+    fidelity: numberFlag(argv, '--fidelity', DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES),
     batchSize: numberFlag(argv, '--batch-size', 100),
     throttleMs: numberFlag(argv, '--throttle-ms', 1000),
     maxCalls: numberFlag(argv, '--max-calls', Number.POSITIVE_INFINITY),

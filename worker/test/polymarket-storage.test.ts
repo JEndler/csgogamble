@@ -27,10 +27,10 @@ describe('polymarket storage key helpers', () => {
   });
 
   it('builds price-history raw and series keys', () => {
-    const raw = priceHistoryRawKey('tok-xyz', '1m', 60, FIXED_DATE);
-    const series = priceHistorySeriesKey('tok-xyz', '1m', 60, FIXED_DATE);
-    expect(raw.startsWith('price-history/raw/tok-xyz/1m/fidelity=60/')).toBe(true);
-    expect(series.startsWith('price-history/series/tok-xyz/1m/fidelity=60/')).toBe(true);
+    const raw = priceHistoryRawKey('tok-xyz', '1m', 1, FIXED_DATE);
+    const series = priceHistorySeriesKey('tok-xyz', '1m', 1, FIXED_DATE);
+    expect(raw.startsWith('price-history/raw/tok-xyz/1m/fidelity=1/')).toBe(true);
+    expect(series.startsWith('price-history/series/tok-xyz/1m/fidelity=1/')).toBe(true);
     expect(series.endsWith('.jsonl')).toBe(true);
   });
 });

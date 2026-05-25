@@ -8,6 +8,7 @@ import {
   fetchPriceHistory,
   PolymarketFetchError,
 } from '../src/polymarket/client';
+import { DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES } from '../src/polymarket/constants';
 import { normalizeEvent, normalizeMarket } from '../src/polymarket/normalize';
 import type { MarketClassification, MarketType, NormalizedMarket, RawGammaEvent } from '../src/polymarket/types';
 
@@ -51,7 +52,7 @@ const DEFAULT_OPTIONS: CanaryOptions = {
   json: false,
   sampleHistory: false,
   interval: '1h',
-  fidelityMinutes: 60,
+  fidelityMinutes: DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES,
 };
 
 function parseFlag(args: string[], name: string): string | null {

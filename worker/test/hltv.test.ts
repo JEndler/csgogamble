@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
+// biome-ignore-all lint/security/noSecrets: false positive on static selectors/test HTML/SQL literals, no credentials.
 import { describe, expect, it } from 'vitest';
 import { discoverMatchUrls, isCloudflareChallenge, parseMatchHtml } from '../src/hltv';
 

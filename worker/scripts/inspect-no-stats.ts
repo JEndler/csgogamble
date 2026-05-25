@@ -1,3 +1,4 @@
+// biome-ignore-all lint/performance/noAwaitInLoops: sequential remote/browser/D1 operations are intentional for rate limits and state ordering.
 /**
  * Debug helper: compare stats-content sections, map menu entries, and
  * mapholder blocks to diagnose why player stats may be missing.

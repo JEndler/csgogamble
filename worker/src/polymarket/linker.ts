@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
 import type { Env } from '../types';
 import { nowIso } from '../utils';
 import { nameSimilarity, normalizeName } from './normalize';

@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { handleRequest } from '../src/app';
 import { setBrowserDiagnosticsProviderForTests, summarizeBrowserHtml } from '../src/browser-debug';

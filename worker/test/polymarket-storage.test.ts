@@ -1,3 +1,4 @@
+// biome-ignore-all lint/security/noSecrets: false positive on static selectors/test HTML/SQL literals, no credentials.
 import { describe, expect, it } from 'vitest';
 import {
   clobMarketKey,

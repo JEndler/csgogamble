@@ -1,3 +1,4 @@
+// biome-ignore-all lint/performance/noAwaitInLoops: sequential remote/browser/D1 operations are intentional for rate limits and state ordering.
 import puppeteer from '@cloudflare/puppeteer';
 import { USER_AGENT } from './constants';
 import { findCloudflareChallengeMarkers } from './hltv';

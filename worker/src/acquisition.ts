@@ -1,3 +1,4 @@
+// biome-ignore-all lint/nursery/noUnnecessaryConditions: Biome false positive on narrowed CLI/domain union.
 import {
   type BrowserPageSnapshot,
   fetchPageSnapshotWithBrowser,

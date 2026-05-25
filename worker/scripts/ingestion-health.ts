@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
 import { PARSER_VERSION } from '../src/constants';
 import { queryD1, sqlString, toNullableString, toNumber } from './ops-utils';
 

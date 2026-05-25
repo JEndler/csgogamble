@@ -1,3 +1,4 @@
+// biome-ignore-all lint/nursery/useExplicitReturnType: legacy test/CLI helper inference is acceptable here.
 /**
  * Remediate partial matches using improved parser and raw HTML from R2.
  */

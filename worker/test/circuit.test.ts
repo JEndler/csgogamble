@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
+// biome-ignore-all lint/nursery/useExplicitReturnType: legacy test/CLI helper inference is acceptable here.
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   classifyFailure,

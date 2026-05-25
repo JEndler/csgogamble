@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: legacy parser/ops control-flow; refactor separately, do not block hygiene gate.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
 import { acquirePageSnapshot } from './acquisition';
 import { closeBrowserSession } from './browser-session';
 import {

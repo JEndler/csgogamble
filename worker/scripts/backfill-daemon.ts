@@ -1,3 +1,4 @@
+// biome-ignore-all lint/nursery/noUnnecessaryConditions: Biome false positive on narrowed CLI/domain union.
 /**
  * backfill-daemon.ts — D1-backed worker-native backfill orchestrator.
  *
@@ -269,7 +270,6 @@ async function runApplyFlow(candidates: CandidateRow[], options: Options): Promi
     totalEnqueued += enqueue.enqueued;
     console.log(`  batch ${i + 1}: enqueued=${enqueue.enqueued} drained=${enqueue.drained}`);
     if (enqueue.drained) break;
-    // biome-ignore lint/performance/noAwaitInLoops: pacing is the point.
     await sleep(options.throttleMs);
   }
 

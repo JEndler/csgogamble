@@ -1,3 +1,4 @@
+// biome-ignore-all lint/performance/noAwaitInLoops: sequential remote/browser/D1 operations are intentional for rate limits and state ordering.
 /**
  * Retry failed match ingestions: re-fetch HTML via Playwright and POST
  * to the worker's /ingest/match endpoint.

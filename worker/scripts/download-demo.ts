@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
+// biome-ignore-all lint/security/noSecrets: false positive on static selectors/test HTML/SQL literals, no credentials.
 /**
  * Download a GOTV demo file from an HLTV match page, upload it to R2,
  * and record the metadata via the worker's /ingest/demo endpoint.

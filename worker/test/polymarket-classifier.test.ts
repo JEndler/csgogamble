@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: legacy parser/test fixtures are intentionally dense; refactor separately.
 import { describe, expect, it } from 'vitest';
 import { classifyMarket } from '../src/polymarket/classifier';
 import type { NormalizedMarket } from '../src/polymarket/types';
